@@ -145,8 +145,8 @@ Order Service ──publish──► [order.placed]
 | Step | Nội dung                                  | Trạng thái |
 |------|-------------------------------------------|------------|
 | 1    | Project Setup & Infrastructure            | DONE       |
-| 2    | Order Service — Producer fundamentals     | NEXT       |
-| 3    | Inventory Service — Consumer fundamentals | Pending    |
+| 2    | Order Service — Producer fundamentals     | DONE       |
+| 3    | Inventory Service — Consumer fundamentals | NEXT       |
 | 4    | Saga Choreography — Full happy path       | Pending    |
 | 5    | Error Handling & Dead Letter Queue        | Pending    |
 | 6    | Idempotency & Exactly-Once Semantics      | Pending    |
