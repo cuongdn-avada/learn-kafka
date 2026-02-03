@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: order-service
+
+  # --- PostgreSQL ---
+  datasource:
+    url: jdbc:postgresql://localhost:5432/order_db
+    username: admin
+    password: admin123
+    hikari:
+      maximum-pool-size: 10
+
+  jpa:
+    hibernate:
+      ddl-auto: update          # Dev only — production dùng Flyway/Liquibase
+    show-sql: false
+    open-in-view: false          # WHY false? Tránh lazy loading ngoài transaction → N+1 problem
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # --- Kafka Producer ---
+  kafka:
+    bootstrap-servers: localhost:9094
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all                  # WHY "all"? Đảm bảo message được replicate trước khi ack
+      retries: 3
+      properties:
+        enable.idempotence: true # WHY? Tránh duplicate khi producer retry
+        max.in.flight.requests.per.connection: 5
+    consumer:
+      group-id: order-service-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "dnc.cuong.common.event"
+
+# --- Server ---
+server:
+  port: 8081
+
+# --- Actuator (health check) ---
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
