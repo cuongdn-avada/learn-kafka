@@ -38,13 +38,21 @@ All services should show `healthy` or `exited (0)` (for kafka-init).
 ./mvnw clean install -DskipTests
 ```
 
-### 3. Run Order Service (Step 2)
+### 3. Run Services
+
+**Terminal 1 — Order Service (port 8081):**
 
 ```bash
 ./mvnw spring-boot:run -pl order-service
 ```
 
-Order Service runs on **port 8081**.
+**Terminal 2 — Inventory Service (port 8082):**
+
+```bash
+./mvnw spring-boot:run -pl inventory-service
+```
+
+Inventory Service auto-seeds 4 sample products on first startup.
 
 ### 4. Test the API
 
@@ -84,9 +92,39 @@ curl http://localhost:8081/api/orders/{orderId}
 curl http://localhost:8081/api/orders?customerId=550e8400-e29b-41d4-a716-446655440000
 ```
 
-### 5. Verify Kafka Message
+**Test stock failure (product with zero stock):**
 
-Open Kafka UI at [http://localhost:8088](http://localhost:8088) and check the `order.placed` topic for the published event.
+```bash
+curl -X POST http://localhost:8081/api/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customerId": "550e8400-e29b-41d4-a716-446655440000",
+    "items": [
+      {
+        "productId": "ac9e6679-7425-40de-944b-e07fc1f90af0",
+        "productName": "Apple Watch Ultra",
+        "quantity": 1,
+        "price": 799.99
+      }
+    ]
+  }'
+```
+
+### 5. Verify Kafka Messages
+
+Open Kafka UI at [http://localhost:8088](http://localhost:8088) and check:
+- `order.placed` — event published by Order Service
+- `order.validated` — event published by Inventory Service (stock OK)
+- `order.failed` — event published by Inventory Service (insufficient stock)
+
+### Sample Product IDs (seeded by Inventory Service)
+
+| Product ID | Name | Stock |
+|------------|------|-------|
+| `7c9e6679-7425-40de-944b-e07fc1f90ae7` | MacBook Pro 14 | 50 |
+| `8a9e6679-7425-40de-944b-e07fc1f90ae8` | Magic Mouse | 100 |
+| `9b9e6679-7425-40de-944b-e07fc1f90ae9` | iPhone 15 Pro | 30 |
+| `ac9e6679-7425-40de-944b-e07fc1f90af0` | Apple Watch Ultra | 0 (for testing failure) |
 
 ## Project Structure
 
@@ -149,7 +187,7 @@ docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 |------|-------------------------------------------|---------|
 | 1    | Project Setup & Infrastructure            | DONE    |
 | 2    | Order Service - Producer fundamentals     | DONE    |
-| 3    | Inventory Service - Consumer fundamentals | NEXT    |
+| 3    | Inventory Service - Consumer fundamentals | DONE    |
 | 4    | Saga Choreography - Full happy path       | Pending |
 | 5    | Error Handling & Dead Letter Queue        | Pending |
 | 6    | Idempotency & Exactly-Once Semantics      | Pending |
