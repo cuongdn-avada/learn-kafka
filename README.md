@@ -54,6 +54,18 @@ All services should show `healthy` or `exited (0)` (for kafka-init).
 
 Inventory Service auto-seeds 4 sample products on first startup.
 
+**Terminal 3 — Payment Service (port 8083):**
+
+```bash
+./mvnw spring-boot:run -pl payment-service
+```
+
+**Terminal 4 — Notification Service (port 8084):**
+
+```bash
+./mvnw spring-boot:run -pl notification-service
+```
+
 ### 4. Test the API
 
 **Create an order:**
@@ -110,12 +122,33 @@ curl -X POST http://localhost:8081/api/orders \
   }'
 ```
 
+**Test payment failure (total amount > $10,000):**
+
+```bash
+curl -X POST http://localhost:8081/api/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customerId": "550e8400-e29b-41d4-a716-446655440000",
+    "items": [
+      {
+        "productId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "productName": "MacBook Pro",
+        "quantity": 5,
+        "price": 2499.99
+      }
+    ]
+  }'
+```
+
 ### 5. Verify Kafka Messages
 
 Open Kafka UI at [http://localhost:8088](http://localhost:8088) and check:
 - `order.placed` — event published by Order Service
 - `order.validated` — event published by Inventory Service (stock OK)
+- `order.paid` — event published by Payment Service (payment OK)
+- `order.completed` — event published by Order Service (saga complete)
 - `order.failed` — event published by Inventory Service (insufficient stock)
+- `payment.failed` — event published by Payment Service (amount > $10,000)
 
 ### Sample Product IDs (seeded by Inventory Service)
 
@@ -188,7 +221,7 @@ docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 | 1    | Project Setup & Infrastructure            | DONE    |
 | 2    | Order Service - Producer fundamentals     | DONE    |
 | 3    | Inventory Service - Consumer fundamentals | DONE    |
-| 4    | Saga Choreography - Full happy path       | Pending |
+| 4    | Saga Choreography - Full happy path       | DONE    |
 | 5    | Error Handling & Dead Letter Queue        | Pending |
 | 6    | Idempotency & Exactly-Once Semantics      | Pending |
 | 7    | Schema Evolution & Contract Management    | Pending |

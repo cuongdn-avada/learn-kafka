@@ -111,4 +111,55 @@ public class OrderService {
     public List<Order> getOrdersByCustomer(UUID customerId) {
         return orderRepository.findByCustomerId(customerId);
     }
+
+    /**
+     * Payment thành công → cập nhật order COMPLETED + publish order.completed.
+     *
+     * WHY publish order.completed?
+     * → Notification Service cần biết order hoàn thành để gửi email/push.
+     * → Các service khác có thể subscribe để trigger post-order logic.
+     */
+    @Transactional
+    public void completeOrder(OrderEvent event) {
+        Order order = orderRepository.findById(event.orderId())
+                .orElseThrow(() -> new OrderNotFoundException(event.orderId()));
+
+        order.setStatus(OrderStatus.COMPLETED);
+        log.info("Order COMPLETED | orderId={}", event.orderId());
+
+        // Build event với item list từ incoming event
+        OrderEvent completedEvent = OrderEvent.create(
+                event.orderId(), event.customerId(),
+                event.items(), event.totalAmount(),
+                OrderStatus.COMPLETED
+        );
+        kafkaProducer.sendOrderCompleted(completedEvent);
+    }
+
+    /**
+     * Stock validation thất bại → cập nhật order FAILED.
+     */
+    @Transactional
+    public void failOrder(OrderEvent event) {
+        Order order = orderRepository.findById(event.orderId())
+                .orElseThrow(() -> new OrderNotFoundException(event.orderId()));
+
+        order.setStatus(OrderStatus.FAILED);
+        order.setFailureReason(event.reason());
+        log.warn("Order FAILED | orderId={} | reason={}", event.orderId(), event.reason());
+    }
+
+    /**
+     * Payment thất bại → cập nhật order PAYMENT_FAILED.
+     * Inventory Service sẽ tự release stock (consume cùng payment.failed topic).
+     */
+    @Transactional
+    public void handlePaymentFailure(OrderEvent event) {
+        Order order = orderRepository.findById(event.orderId())
+                .orElseThrow(() -> new OrderNotFoundException(event.orderId()));
+
+        order.setStatus(OrderStatus.PAYMENT_FAILED);
+        order.setFailureReason(event.reason());
+        log.warn("Order PAYMENT_FAILED | orderId={} | reason={}", event.orderId(), event.reason());
+    }
 }

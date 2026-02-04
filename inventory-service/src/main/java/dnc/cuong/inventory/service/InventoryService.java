@@ -115,4 +115,39 @@ public class InventoryService {
         );
         kafkaProducer.sendOrderValidated(validatedEvent);
     }
+
+    /**
+     * Compensation: hoàn trả stock khi payment thất bại.
+     *
+     * Flow:
+     * 1. Batch fetch products theo order items
+     * 2. Release reserved stock cho từng item
+     * 3. JPA dirty checking tự flush UPDATE khi transaction commit
+     */
+    @Transactional
+    public void compensateReservation(OrderEvent event) {
+        log.info("Compensating reservation | orderId={} | itemCount={}",
+                event.orderId(), event.items().size());
+
+        List<UUID> productIds = event.items().stream()
+                .map(OrderEvent.OrderItem::productId)
+                .toList();
+
+        Map<UUID, Product> productMap = productRepository.findAllByIdIn(productIds)
+                .stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+
+        for (OrderEvent.OrderItem item : event.items()) {
+            Product product = productMap.get(item.productId());
+            if (product != null) {
+                product.releaseStock(item.quantity());
+                log.info("Released stock | productId={} | productName={} | quantity={}",
+                        product.getId(), product.getName(), item.quantity());
+            } else {
+                log.warn("Product not found during compensation | productId={}", item.productId());
+            }
+        }
+
+        log.info("Compensation completed | orderId={}", event.orderId());
+    }
 }

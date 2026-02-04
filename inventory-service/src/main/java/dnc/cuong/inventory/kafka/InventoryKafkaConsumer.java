@@ -47,4 +47,26 @@ public class InventoryKafkaConsumer {
 
         log.info("Finished processing [{}] | orderId={}", KafkaTopics.ORDER_PLACED, event.orderId());
     }
+
+    /**
+     * Compensation listener: khi payment thất bại → release reserved stock.
+     *
+     * WHY Inventory Service consume payment.failed?
+     * → Saga compensation: stock đã reserve ở bước validate.
+     * → Payment thất bại → phải hoàn trả stock để customer khác đặt được.
+     * → Nếu không release → stock bị "leak" (reserved mãi mãi).
+     */
+    @KafkaListener(
+            topics = KafkaTopics.PAYMENT_FAILED,
+            groupId = "inventory-service-group",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void onPaymentFailed(OrderEvent event) {
+        log.info("Received event from [{}] | eventId={} | orderId={} | status={}",
+                KafkaTopics.PAYMENT_FAILED, event.eventId(), event.orderId(), event.status());
+
+        inventoryService.compensateReservation(event);
+
+        log.info("Finished processing [{}] | orderId={}", KafkaTopics.PAYMENT_FAILED, event.orderId());
+    }
 }
