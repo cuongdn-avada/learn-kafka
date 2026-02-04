@@ -77,6 +77,20 @@ public class Product {
         reservedQuantity += quantity;
     }
 
+    /**
+     * Hoàn trả stock khi payment thất bại (Saga compensation).
+     * reserved → available.
+     */
+    public void releaseStock(int quantity) {
+        if (quantity > reservedQuantity) {
+            throw new IllegalStateException(
+                    "Cannot release more than reserved for product " + id +
+                    ": reserved=" + reservedQuantity + ", requested=" + quantity);
+        }
+        reservedQuantity -= quantity;
+        availableQuantity += quantity;
+    }
+
     @PrePersist
     void onCreate() {
         createdAt = Instant.now();
