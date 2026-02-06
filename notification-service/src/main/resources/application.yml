@@ -11,9 +11,12 @@ spring:
       auto-offset-reset: earliest
       properties:
         spring.json.trusted.packages: "dnc.cuong.common.event"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 # Notification service không cần database — chỉ consume event và gửi notification
-# Không cần producer config — service này chỉ consume, không publish event
+# Producer config cần cho DeadLetterPublishingRecoverer — publish failed messages vào .DLT topic
 
 server:
   port: 8084

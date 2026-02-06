@@ -9,17 +9,20 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
-import org.springframework.util.backoff.FixedBackOff;
+import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.Map;
 
 /**
  * Kafka Consumer configuration cho Notification Service.
  *
- * Notification Service là consumer-only — không produce event.
- * Consume 3 topics: order.completed, order.failed, payment.failed.
+ * Notification Service consume 3 topics: order.completed, order.failed, payment.failed.
+ * Sử dụng DeadLetterPublishingRecoverer + ExponentialBackOff:
+ * → Message fail sau retries được publish vào .DLT topic thay vì bị drop.
  */
 @Configuration
 public class KafkaConsumerConfig {
@@ -38,16 +41,22 @@ public class KafkaConsumerConfig {
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, OrderEvent> kafkaListenerContainerFactory(
-            ConsumerFactory<String, OrderEvent> consumerFactory) {
+            ConsumerFactory<String, OrderEvent> consumerFactory,
+            KafkaTemplate<String, OrderEvent> kafkaTemplate) {
 
         ConcurrentKafkaListenerContainerFactory<String, OrderEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
 
         factory.setConsumerFactory(consumerFactory);
         factory.setConcurrency(3);
-        factory.setCommonErrorHandler(
-                new DefaultErrorHandler(new FixedBackOff(1000L, 3))
-        );
+
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+
+        ExponentialBackOff backOff = new ExponentialBackOff(1000L, 2.0);
+        backOff.setMaxInterval(10000L);
+        backOff.setMaxElapsedTime(30000L);
+
+        factory.setCommonErrorHandler(new DefaultErrorHandler(recoverer, backOff));
 
         return factory;
     }

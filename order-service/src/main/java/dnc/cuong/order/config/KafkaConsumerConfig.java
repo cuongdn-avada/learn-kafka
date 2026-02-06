@@ -9,9 +9,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
-import org.springframework.util.backoff.FixedBackOff;
+import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.Map;
 
@@ -24,6 +26,11 @@ import java.util.Map;
  *   - order.paid → COMPLETED
  *   - order.failed → FAILED (stock insufficient)
  *   - payment.failed → PAYMENT_FAILED
+ *
+ * WHY DeadLetterPublishingRecoverer thay vì FixedBackOff?
+ * → FixedBackOff chỉ retry rồi skip — message bị mất.
+ * → DeadLetterPublishingRecoverer publish message fail vào .DLT topic.
+ * → Kết hợp ExponentialBackOff: retry thông minh hơn, tránh hammering.
  */
 @Configuration
 public class KafkaConsumerConfig {
@@ -42,16 +49,25 @@ public class KafkaConsumerConfig {
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, OrderEvent> kafkaListenerContainerFactory(
-            ConsumerFactory<String, OrderEvent> consumerFactory) {
+            ConsumerFactory<String, OrderEvent> consumerFactory,
+            KafkaTemplate<String, OrderEvent> kafkaTemplate) {
 
         ConcurrentKafkaListenerContainerFactory<String, OrderEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
 
         factory.setConsumerFactory(consumerFactory);
         factory.setConcurrency(3);
-        factory.setCommonErrorHandler(
-                new DefaultErrorHandler(new FixedBackOff(1000L, 3))
-        );
+
+        // WHY DeadLetterPublishingRecoverer + ExponentialBackOff?
+        // → Sau khi retry hết → message được publish vào <topic>.DLT thay vì bị drop.
+        // → ExponentialBackOff: 1s → 2s → 4s → 8s → 10s (max), tối đa 3 lần retry.
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+
+        ExponentialBackOff backOff = new ExponentialBackOff(1000L, 2.0);
+        backOff.setMaxInterval(10000L);
+        backOff.setMaxElapsedTime(30000L); // ~3 retries with exponential delays
+
+        factory.setCommonErrorHandler(new DefaultErrorHandler(recoverer, backOff));
 
         return factory;
     }
