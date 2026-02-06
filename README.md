@@ -183,6 +183,7 @@ learn-kafka/
 | `order.completed` | Order Service     | Notification Service           |
 | `order.failed`    | Inventory Service | Order Service, Notification    |
 | `payment.failed`  | Payment Service   | Inventory, Order, Notification |
+| `*.DLT`           | Error Handler     | DLT consumers (per service)    |
 
 ## Database Credentials (Local Dev)
 
@@ -191,6 +192,27 @@ learn-kafka/
 | `order_db`     | admin | admin123 | 5432 |
 | `inventory_db` | admin | admin123 | 5432 |
 | `payment_db`   | admin | admin123 | 5432 |
+
+## Testing Dead Letter Queue
+
+When a consumer fails to process a message after 3 retries (with exponential backoff), the message is published to a `.DLT` (Dead Letter Topic).
+
+**Verify DLT topics exist:**
+
+```bash
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092 | grep DLT
+```
+
+**Monitor DLT messages in Kafka UI:**
+
+Open [http://localhost:8088](http://localhost:8088) and check topics ending with `.DLT`.
+
+**Check DLT consumer logs:**
+
+DLT consumers log at ERROR level with `[DLT]` prefix. Look for messages like:
+```
+[DLT] Failed to process order.placed | orderId=... | eventId=... | status=...
+```
 
 ## Useful Commands
 
@@ -222,7 +244,7 @@ docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 | 2    | Order Service - Producer fundamentals     | DONE    |
 | 3    | Inventory Service - Consumer fundamentals | DONE    |
 | 4    | Saga Choreography - Full happy path       | DONE    |
-| 5    | Error Handling & Dead Letter Queue        | Pending |
+| 5    | Error Handling & Dead Letter Queue        | DONE    |
 | 6    | Idempotency & Exactly-Once Semantics      | Pending |
 | 7    | Schema Evolution & Contract Management    | Pending |
 | 8    | Testing - Unit + Integration              | Pending |

@@ -18,4 +18,15 @@ public final class KafkaTopics {
     public static final String ORDER_COMPLETED = "order.completed";
     public static final String ORDER_FAILED = "order.failed";
     public static final String PAYMENT_FAILED = "payment.failed";
+
+    // Dead Letter Topic suffix — Spring Kafka convention
+    public static final String DLT_SUFFIX = ".DLT";
+
+    /**
+     * Generate DLT topic name from source topic.
+     * e.g. "order.placed" → "order.placed.DLT"
+     */
+    public static String dlt(String sourceTopic) {
+        return sourceTopic + DLT_SUFFIX;
+    }
 }

@@ -91,6 +91,13 @@ services:
         /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic order.completed --partitions 3 --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic order.failed --partitions 3 --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic payment.failed --partitions 3 --replication-factor 1
+        echo 'Dang tao Dead Letter Topics...'
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic order.placed.DLT --partitions 1 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic order.validated.DLT --partitions 1 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic order.paid.DLT --partitions 1 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic order.completed.DLT --partitions 1 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic order.failed.DLT --partitions 1 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic payment.failed.DLT --partitions 1 --replication-factor 1
         echo 'Topics da tao xong:'
         /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server kafka:9092
 
