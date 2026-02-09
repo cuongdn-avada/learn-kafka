@@ -1,5 +1,7 @@
 package dnc.cuong.order.kafka;
 
+import dnc.cuong.common.avro.OrderEventAvro;
+import dnc.cuong.common.avro.OrderEventMapper;
 import dnc.cuong.common.event.KafkaTopics;
 import dnc.cuong.common.event.OrderEvent;
 import lombok.RequiredArgsConstructor;
@@ -11,53 +13,39 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Producer chịu trách nhiệm publish OrderEvent lên Kafka.
+ * Producer chịu trách nhiệm publish OrderEvent lên Kafka (Avro format).
  *
  * WHY tách Producer thành class riêng thay vì inject KafkaTemplate trực tiếp vào Service?
  * → Single Responsibility — Producer chỉ lo việc gửi message.
- * → Encapsulate logic: chọn topic, chọn key, xử lý callback.
+ * → Encapsulate Avro conversion: Service layer dùng OrderEvent, Producer convert sang Avro.
  * → Dễ mock trong unit test (mock OrderKafkaProducer thay vì mock KafkaTemplate).
- * → Sau này thêm retry, circuit breaker, metrics tại đây mà không ảnh hưởng business logic.
  *
- * WHY dùng orderId làm message key?
- * → Kafka đảm bảo ordering TRONG CÙNG PARTITION.
- * → Cùng orderId → cùng partition → tất cả event của 1 order được xử lý theo thứ tự.
- * → Ví dụ: order.placed luôn đến trước order.validated cho cùng 1 orderId.
+ * WHY convert OrderEvent → OrderEventAvro ở đây?
+ * → Service layer không cần biết về Avro — giữ business logic clean.
+ * → Kafka layer chịu trách nhiệm serialization format.
+ * → Nếu sau này đổi format (Protobuf, etc.), chỉ sửa Producer/Consumer.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class OrderKafkaProducer {
 
-    private final KafkaTemplate<String, OrderEvent> kafkaTemplate;
+    private static final String SOURCE = "order-service";
 
-    /**
-     * Publish event lên topic order.placed.
-     *
-     * WHY dùng CompletableFuture thay vì send().get() (blocking)?
-     * → Non-blocking — thread không bị block chờ Kafka broker ack.
-     * → Throughput cao hơn khi publish nhiều message.
-     * → Callback xử lý success/failure asynchronously.
-     *
-     * WHY log cả partition và offset?
-     * → Debug: biết message nằm ở partition nào, offset bao nhiêu.
-     * → Troubleshoot: khi consumer bị lag, trace được message cụ thể.
-     */
-    public CompletableFuture<SendResult<String, OrderEvent>> sendOrderPlaced(OrderEvent event) {
+    private final KafkaTemplate<String, OrderEventAvro> kafkaTemplate;
+
+    public CompletableFuture<SendResult<String, OrderEventAvro>> sendOrderPlaced(OrderEvent event) {
         String key = event.orderId().toString();
+        OrderEventAvro avroEvent = OrderEventMapper.toAvro(event, SOURCE);
 
         log.info("Publishing event to [{}] | key={} | eventId={} | status={}",
                 KafkaTopics.ORDER_PLACED, key, event.eventId(), event.status());
 
-        CompletableFuture<SendResult<String, OrderEvent>> future =
-                kafkaTemplate.send(KafkaTopics.ORDER_PLACED, key, event);
+        CompletableFuture<SendResult<String, OrderEventAvro>> future =
+                kafkaTemplate.send(KafkaTopics.ORDER_PLACED, key, avroEvent);
 
         future.whenComplete((result, ex) -> {
             if (ex != null) {
-                // WHY log error thay vì throw?
-                // → Đây là async callback, exception không propagate về caller.
-                // → Log để alert system (Prometheus/Grafana sẽ bắt error log).
-                // → Caller đã nhận CompletableFuture, có thể handle riêng.
                 log.error("FAILED to publish event to [{}] | key={} | eventId={} | error={}",
                         KafkaTopics.ORDER_PLACED, key, event.eventId(), ex.getMessage(), ex);
             } else {
@@ -71,13 +59,11 @@ public class OrderKafkaProducer {
         return future;
     }
 
-    /**
-     * Publish event cập nhật trạng thái order (COMPLETED, FAILED, etc.).
-     * Dùng cho consumer side khi Order Service nhận event từ service khác.
-     */
-    public CompletableFuture<SendResult<String, OrderEvent>> sendOrderCompleted(OrderEvent event) {
+    public CompletableFuture<SendResult<String, OrderEventAvro>> sendOrderCompleted(OrderEvent event) {
         String key = event.orderId().toString();
+        OrderEventAvro avroEvent = OrderEventMapper.toAvro(event, SOURCE);
+
         log.info("Publishing event to [{}] | key={} | eventId={}", KafkaTopics.ORDER_COMPLETED, key, event.eventId());
-        return kafkaTemplate.send(KafkaTopics.ORDER_COMPLETED, key, event);
+        return kafkaTemplate.send(KafkaTopics.ORDER_COMPLETED, key, avroEvent);
     }
 }

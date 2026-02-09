@@ -2,18 +2,22 @@ spring:
   application:
     name: notification-service
 
+  # --- Kafka --- Avro serialization với Schema Registry
   kafka:
     bootstrap-servers: localhost:9094
     consumer:
       group-id: notification-service-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
       auto-offset-reset: earliest
       properties:
-        spring.json.trusted.packages: "dnc.cuong.common.event"
+        schema.registry.url: http://localhost:8085
+        specific.avro.reader: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      properties:
+        schema.registry.url: http://localhost:8085
 
 # Notification service không cần database — chỉ consume event và gửi notification
 # Producer config cần cho DeadLetterPublishingRecoverer — publish failed messages vào .DLT topic

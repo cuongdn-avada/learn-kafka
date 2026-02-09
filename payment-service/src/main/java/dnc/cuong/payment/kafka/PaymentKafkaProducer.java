@@ -1,5 +1,7 @@
 package dnc.cuong.payment.kafka;
 
+import dnc.cuong.common.avro.OrderEventAvro;
+import dnc.cuong.common.avro.OrderEventMapper;
 import dnc.cuong.common.event.KafkaTopics;
 import dnc.cuong.common.event.OrderEvent;
 import lombok.RequiredArgsConstructor;
@@ -11,7 +13,7 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Producer publish kết quả payment lên Kafka.
+ * Producer publish kết quả payment lên Kafka (Avro format).
  *
  * Publish 2 loại event:
  * - order.paid: payment thành công → Order Service cập nhật COMPLETED
@@ -22,16 +24,19 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 public class PaymentKafkaProducer {
 
-    private final KafkaTemplate<String, OrderEvent> kafkaTemplate;
+    private static final String SOURCE = "payment-service";
 
-    public CompletableFuture<SendResult<String, OrderEvent>> sendOrderPaid(OrderEvent event) {
+    private final KafkaTemplate<String, OrderEventAvro> kafkaTemplate;
+
+    public CompletableFuture<SendResult<String, OrderEventAvro>> sendOrderPaid(OrderEvent event) {
         String key = event.orderId().toString();
+        OrderEventAvro avroEvent = OrderEventMapper.toAvro(event, SOURCE);
 
         log.info("Publishing event to [{}] | key={} | eventId={} | status={}",
                 KafkaTopics.ORDER_PAID, key, event.eventId(), event.status());
 
-        CompletableFuture<SendResult<String, OrderEvent>> future =
-                kafkaTemplate.send(KafkaTopics.ORDER_PAID, key, event);
+        CompletableFuture<SendResult<String, OrderEventAvro>> future =
+                kafkaTemplate.send(KafkaTopics.ORDER_PAID, key, avroEvent);
 
         future.whenComplete((result, ex) -> {
             if (ex != null) {
@@ -47,14 +52,15 @@ public class PaymentKafkaProducer {
         return future;
     }
 
-    public CompletableFuture<SendResult<String, OrderEvent>> sendPaymentFailed(OrderEvent event) {
+    public CompletableFuture<SendResult<String, OrderEventAvro>> sendPaymentFailed(OrderEvent event) {
         String key = event.orderId().toString();
+        OrderEventAvro avroEvent = OrderEventMapper.toAvro(event, SOURCE);
 
         log.info("Publishing event to [{}] | key={} | eventId={} | status={}",
                 KafkaTopics.PAYMENT_FAILED, key, event.eventId(), event.status());
 
-        CompletableFuture<SendResult<String, OrderEvent>> future =
-                kafkaTemplate.send(KafkaTopics.PAYMENT_FAILED, key, event);
+        CompletableFuture<SendResult<String, OrderEventAvro>> future =
+                kafkaTemplate.send(KafkaTopics.PAYMENT_FAILED, key, avroEvent);
 
         future.whenComplete((result, ex) -> {
             if (ex != null) {

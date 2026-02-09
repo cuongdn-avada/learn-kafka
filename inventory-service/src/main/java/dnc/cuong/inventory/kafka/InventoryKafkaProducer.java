@@ -1,5 +1,7 @@
 package dnc.cuong.inventory.kafka;
 
+import dnc.cuong.common.avro.OrderEventAvro;
+import dnc.cuong.common.avro.OrderEventMapper;
 import dnc.cuong.common.event.KafkaTopics;
 import dnc.cuong.common.event.OrderEvent;
 import lombok.RequiredArgsConstructor;
@@ -11,12 +13,11 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Producer publish kết quả validation lên Kafka.
+ * Producer publish kết quả validation lên Kafka (Avro format).
  *
  * WHY Inventory Service publish 2 topic khác nhau (validated vs failed)?
  * → Choreography pattern: downstream service chỉ listen topic nó quan tâm.
  * → Payment Service chỉ listen order.validated (không cần biết order.failed).
- * → Order Service và Notification Service listen order.failed để cập nhật trạng thái.
  * → Tách topic giúp decouple consumers, dễ scale independently.
  */
 @Component
@@ -24,20 +25,19 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 public class InventoryKafkaProducer {
 
-    private final KafkaTemplate<String, OrderEvent> kafkaTemplate;
+    private static final String SOURCE = "inventory-service";
 
-    /**
-     * Publish khi stock đủ → order đã validate thành công.
-     * Consumer tiếp theo: Payment Service.
-     */
-    public CompletableFuture<SendResult<String, OrderEvent>> sendOrderValidated(OrderEvent event) {
+    private final KafkaTemplate<String, OrderEventAvro> kafkaTemplate;
+
+    public CompletableFuture<SendResult<String, OrderEventAvro>> sendOrderValidated(OrderEvent event) {
         String key = event.orderId().toString();
+        OrderEventAvro avroEvent = OrderEventMapper.toAvro(event, SOURCE);
 
         log.info("Publishing event to [{}] | key={} | eventId={} | status={}",
                 KafkaTopics.ORDER_VALIDATED, key, event.eventId(), event.status());
 
-        CompletableFuture<SendResult<String, OrderEvent>> future =
-                kafkaTemplate.send(KafkaTopics.ORDER_VALIDATED, key, event);
+        CompletableFuture<SendResult<String, OrderEventAvro>> future =
+                kafkaTemplate.send(KafkaTopics.ORDER_VALIDATED, key, avroEvent);
 
         future.whenComplete((result, ex) -> {
             if (ex != null) {
@@ -54,18 +54,15 @@ public class InventoryKafkaProducer {
         return future;
     }
 
-    /**
-     * Publish khi stock không đủ → order thất bại.
-     * Consumer tiếp theo: Order Service (cập nhật FAILED), Notification Service.
-     */
-    public CompletableFuture<SendResult<String, OrderEvent>> sendOrderFailed(OrderEvent event) {
+    public CompletableFuture<SendResult<String, OrderEventAvro>> sendOrderFailed(OrderEvent event) {
         String key = event.orderId().toString();
+        OrderEventAvro avroEvent = OrderEventMapper.toAvro(event, SOURCE);
 
         log.info("Publishing event to [{}] | key={} | eventId={} | status={} | reason={}",
                 KafkaTopics.ORDER_FAILED, key, event.eventId(), event.status(), event.reason());
 
-        CompletableFuture<SendResult<String, OrderEvent>> future =
-                kafkaTemplate.send(KafkaTopics.ORDER_FAILED, key, event);
+        CompletableFuture<SendResult<String, OrderEventAvro>> future =
+                kafkaTemplate.send(KafkaTopics.ORDER_FAILED, key, avroEvent);
 
         future.whenComplete((result, ex) -> {
             if (ex != null) {

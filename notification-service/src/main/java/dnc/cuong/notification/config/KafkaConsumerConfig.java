@@ -1,6 +1,8 @@
 package dnc.cuong.notification.config;
 
-import dnc.cuong.common.event.OrderEvent;
+import dnc.cuong.common.avro.OrderEventAvro;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
@@ -12,39 +14,39 @@ import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
-import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.Map;
 
 /**
- * Kafka Consumer configuration cho Notification Service.
+ * Kafka Consumer configuration — Avro deserialization với Schema Registry.
  *
  * Notification Service consume 3 topics: order.completed, order.failed, payment.failed.
- * Sử dụng DeadLetterPublishingRecoverer + ExponentialBackOff:
- * → Message fail sau retries được publish vào .DLT topic thay vì bị drop.
+ * Sử dụng DeadLetterPublishingRecoverer + ExponentialBackOff.
  */
 @Configuration
 public class KafkaConsumerConfig {
 
     @Bean
-    public ConsumerFactory<String, OrderEvent> consumerFactory(KafkaProperties kafkaProperties) {
+    public ConsumerFactory<String, OrderEventAvro> consumerFactory(KafkaProperties kafkaProperties) {
         Map<String, Object> props = kafkaProperties.buildConsumerProperties(null);
 
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
-        props.put(JsonDeserializer.TRUSTED_PACKAGES, "dnc.cuong.common.event");
-        props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, OrderEvent.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
+        props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+                props.getOrDefault(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+                        "http://localhost:8085"));
+        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
 
         return new DefaultKafkaConsumerFactory<>(props);
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, OrderEvent> kafkaListenerContainerFactory(
-            ConsumerFactory<String, OrderEvent> consumerFactory,
-            KafkaTemplate<String, OrderEvent> kafkaTemplate) {
+    public ConcurrentKafkaListenerContainerFactory<String, OrderEventAvro> kafkaListenerContainerFactory(
+            ConsumerFactory<String, OrderEventAvro> consumerFactory,
+            KafkaTemplate<String, OrderEventAvro> kafkaTemplate) {
 
-        ConcurrentKafkaListenerContainerFactory<String, OrderEvent> factory =
+        ConcurrentKafkaListenerContainerFactory<String, OrderEventAvro> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
 
         factory.setConsumerFactory(consumerFactory);

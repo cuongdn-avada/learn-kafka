@@ -12,14 +12,15 @@
 
     <artifactId>common</artifactId>
     <name>common</name>
-    <description>Shared events, DTOs, và constants dùng chung giữa các service</description>
+    <description>Shared events, DTOs, Avro schemas, và constants dùng chung giữa các service</description>
 
     <!--
         WHY module common không cần spring-boot-starter?
-        → Module này chỉ chứa plain Java classes (events, DTOs).
+        → Module này chỉ chứa plain Java classes (events, DTOs, Avro schemas).
         → Không cần Spring context, không cần auto-configuration.
         → Giữ lightweight, tránh kéo transitive dependencies không cần thiết.
-        → Jackson để serialize/deserialize event payload.
+        → Jackson để serialize/deserialize event payload (REST API layer).
+        → Avro để serialize/deserialize Kafka messages (Schema Registry).
     -->
     <dependencies>
         <dependency>
@@ -30,6 +31,35 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
+        <!-- Avro — schema-based serialization for Kafka messages -->
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Avro Maven Plugin — generates Java classes from .avsc schema files -->
+            <plugin>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <version>${avro.version}</version>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirectory>${project.basedir}/src/main/avro</sourceDirectory>
+                            <outputDirectory>${project.build.directory}/generated-sources/avro</outputDirectory>
+                            <stringType>String</stringType>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

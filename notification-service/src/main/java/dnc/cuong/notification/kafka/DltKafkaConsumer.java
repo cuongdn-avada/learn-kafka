@@ -1,7 +1,7 @@
 package dnc.cuong.notification.kafka;
 
+import dnc.cuong.common.avro.OrderEventAvro;
 import dnc.cuong.common.event.KafkaTopics;
-import dnc.cuong.common.event.OrderEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -19,26 +19,26 @@ public class DltKafkaConsumer {
             topics = KafkaTopics.ORDER_COMPLETED + KafkaTopics.DLT_SUFFIX,
             groupId = "notification-service-dlt-group"
     )
-    public void onOrderCompletedDlt(OrderEvent event) {
+    public void onOrderCompletedDlt(OrderEventAvro event) {
         log.error("[DLT] Failed to process order.completed | orderId={} | eventId={} | status={}",
-                event.orderId(), event.eventId(), event.status());
+                event.getOrderId(), event.getEventId(), event.getStatus());
     }
 
     @KafkaListener(
             topics = KafkaTopics.ORDER_FAILED + KafkaTopics.DLT_SUFFIX,
             groupId = "notification-service-dlt-group"
     )
-    public void onOrderFailedDlt(OrderEvent event) {
+    public void onOrderFailedDlt(OrderEventAvro event) {
         log.error("[DLT] Failed to process order.failed | orderId={} | eventId={} | status={}",
-                event.orderId(), event.eventId(), event.status());
+                event.getOrderId(), event.getEventId(), event.getStatus());
     }
 
     @KafkaListener(
             topics = KafkaTopics.PAYMENT_FAILED + KafkaTopics.DLT_SUFFIX,
             groupId = "notification-service-dlt-group"
     )
-    public void onPaymentFailedDlt(OrderEvent event) {
+    public void onPaymentFailedDlt(OrderEventAvro event) {
         log.error("[DLT] Failed to process payment.failed | orderId={} | eventId={} | status={}",
-                event.orderId(), event.eventId(), event.status());
+                event.getOrderId(), event.getEventId(), event.getStatus());
     }
 }
