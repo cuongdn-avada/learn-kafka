@@ -44,31 +44,25 @@ All services should show `healthy` or `exited (0)` (for kafka-init).
 
 ### 3. Run Services
 
-**Terminal 1 — Order Service (port 8081):**
+**Option A — Run locally (dev mode):**
 
 ```bash
+# Terminal 1-4: each service in separate terminal
 ./mvnw spring-boot:run -pl order-service
-```
-
-**Terminal 2 — Inventory Service (port 8082):**
-
-```bash
 ./mvnw spring-boot:run -pl inventory-service
-```
-
-Inventory Service auto-seeds 4 sample products on first startup.
-
-**Terminal 3 — Payment Service (port 8083):**
-
-```bash
 ./mvnw spring-boot:run -pl payment-service
-```
-
-**Terminal 4 — Notification Service (port 8084):**
-
-```bash
 ./mvnw spring-boot:run -pl notification-service
 ```
+
+**Option B — Run in Docker (containerized mode):**
+
+```bash
+docker compose --profile app up -d --build
+```
+
+This builds and starts all 4 services in containers alongside infrastructure.
+
+Inventory Service auto-seeds 4 sample products on first startup.
 
 ### 4. Test the API
 
@@ -320,11 +314,58 @@ Logs include traceId and spanId for cross-service correlation:
 INFO [order-service,6a3d8f2b1c4e5a7b,9f8e7d6c5b4a3210] Order created | orderId=...
 ```
 
+## Production Hardening (Step 10)
+
+### Containerization
+
+All 4 services have multi-stage Dockerfiles (JDK build → JRE runtime):
+
+```bash
+# Run infra only (dev mode — run services with IDE/mvnw)
+docker compose up -d
+
+# Run everything in Docker (infra + services)
+docker compose --profile app up -d --build
+```
+
+### Graceful Shutdown
+
+All services configured with `server.shutdown: graceful` and 30s timeout, ensuring in-flight Kafka messages and HTTP requests complete before shutdown.
+
+### Kafka Production Tuning
+
+| Config | Value | Purpose |
+|--------|-------|---------|
+| `compression.type` | snappy | ~50% smaller messages, low CPU |
+| `linger.ms` | 20 | Batch messages 20ms before sending |
+| `batch.size` | 32768 | 32KB batch (2x default) |
+| `max.poll.records` | 100 | Limit records per consumer poll |
+| `session.timeout.ms` | 45000 | 45s heartbeat timeout |
+
+### Custom Kafka Health Indicator
+
+Each service has `KafkaHealthIndicator` using `AdminClient.describeCluster()`:
+
+```bash
+curl http://localhost:8081/actuator/health | jq '.components.kafkaClusterHealth'
+# {"status":"UP","details":{"clusterId":"...","nodeCount":1}}
+```
+
+### Docker Profiles
+
+| Profile | application.yml | Purpose |
+|---------|-----------------|---------|
+| default | `application.yml` | Local dev (localhost URLs) |
+| docker | `application-docker.yml` | Docker environment (service name URLs) |
+
 ## Useful Commands
 
 ```bash
 # Stop infrastructure
 docker compose down
+
+# Stop everything (infra + services)
+docker compose --profile app down
 
 # Stop and remove volumes (reset data)
 docker compose down -v
@@ -355,4 +396,4 @@ docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 | 7    | Schema Evolution & Contract Management    | DONE    |
 | 8    | Testing - Unit + Integration              | DONE    |
 | 9    | Observability - Metrics, Tracing, Logging | DONE    |
-| 10   | Production Hardening & Advanced Topics    | Pending |
+| 10   | Production Hardening & Advanced Topics    | DONE    |

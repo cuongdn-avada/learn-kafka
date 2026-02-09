@@ -217,7 +217,7 @@ Schema Registry:
 | 7    | Schema Evolution & Contract Management    | DONE       |
 | 8    | Testing — Unit + Integration              | DONE       |
 | 9    | Observability — Metrics, Tracing, Logging | DONE       |
-| 10   | Production Hardening & Advanced Topics    | NEXT       |
+| 10   | Production Hardening & Advanced Topics    | DONE       |
 
 ## Observability Architecture (Step 9)
 
@@ -258,3 +258,29 @@ Spring Boot Service
 - `KafkaTemplate.setObservationEnabled(true)` — propagate traceId vào Kafka headers khi produce
 - `ContainerProperties.setObservationEnabled(true)` — extract traceId từ Kafka headers khi consume
 - Config cả trong `application.yml` và Java config class
+
+## Production Hardening (Step 10)
+
+### Containerization
+- Multi-stage Dockerfiles: eclipse-temurin:21-jdk-alpine (build) → eclipse-temurin:21-jre-alpine (runtime)
+- JVM tuning: `-XX:+UseG1GC -XX:MaxRAMPercentage=75.0`
+- Docker Compose profiles: `docker compose up -d` (infra only) vs `docker compose --profile app up -d` (full stack)
+- Resource limits: 512MB per service (384MB for notification-service)
+
+### Graceful Shutdown
+- `server.shutdown: graceful` + `spring.lifecycle.timeout-per-shutdown-phase: 30s`
+- In-flight Kafka messages và HTTP requests hoàn thành trước khi shutdown
+
+### Kafka Production Tuning
+- Producer: compression.type=snappy, linger.ms=20, batch.size=32768, delivery.timeout.ms=120000
+- Consumer: max.poll.records=100, max.poll.interval.ms=300000, session.timeout.ms=45000, heartbeat.interval.ms=15000
+
+### Custom KafkaHealthIndicator
+- Mỗi service có `KafkaHealthIndicator` dùng `AdminClient.describeCluster()` với 5s timeout
+- Report: clusterId, nodeCount, bootstrapServers
+- Bean name: `kafkaClusterHealth` (hiển thị trong /actuator/health)
+
+### Docker Profiles (application-docker.yml)
+- Override localhost URLs → Docker service names (postgres, kafka, schema-registry, zipkin)
+- `management.endpoint.health.show-details: when-authorized` (safer than `always`)
+- `management.tracing.sampling.probability: 0.5` (giảm overhead vs 1.0 ở dev)
