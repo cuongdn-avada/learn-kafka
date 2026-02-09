@@ -1,11 +1,14 @@
 package dnc.cuong.order.service;
 
 import dnc.cuong.common.dto.OrderCreateRequest;
+import dnc.cuong.common.event.KafkaTopics;
 import dnc.cuong.common.event.OrderEvent;
 import dnc.cuong.common.event.OrderEvent.OrderItem;
 import dnc.cuong.common.event.OrderStatus;
 import dnc.cuong.order.domain.Order;
 import dnc.cuong.order.domain.OrderRepository;
+import dnc.cuong.order.domain.ProcessedEvent;
+import dnc.cuong.order.domain.ProcessedEventRepository;
 import dnc.cuong.order.kafka.OrderKafkaProducer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +36,7 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    private final ProcessedEventRepository processedEventRepository;
     private final OrderKafkaProducer kafkaProducer;
 
     /**
@@ -121,10 +125,18 @@ public class OrderService {
      */
     @Transactional
     public void completeOrder(OrderEvent event) {
+        // Idempotency check: prevent duplicate status update
+        if (processedEventRepository.existsById(event.eventId())) {
+            log.warn("Duplicate event detected, skipping | eventId={} | orderId={} | topic={}",
+                    event.eventId(), event.orderId(), KafkaTopics.ORDER_PAID);
+            return;
+        }
+
         Order order = orderRepository.findById(event.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(event.orderId()));
 
         order.setStatus(OrderStatus.COMPLETED);
+        processedEventRepository.save(new ProcessedEvent(event.eventId(), KafkaTopics.ORDER_PAID));
         log.info("Order COMPLETED | orderId={}", event.orderId());
 
         // Build event với item list từ incoming event
@@ -141,11 +153,19 @@ public class OrderService {
      */
     @Transactional
     public void failOrder(OrderEvent event) {
+        // Idempotency check
+        if (processedEventRepository.existsById(event.eventId())) {
+            log.warn("Duplicate event detected, skipping | eventId={} | orderId={} | topic={}",
+                    event.eventId(), event.orderId(), KafkaTopics.ORDER_FAILED);
+            return;
+        }
+
         Order order = orderRepository.findById(event.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(event.orderId()));
 
         order.setStatus(OrderStatus.FAILED);
         order.setFailureReason(event.reason());
+        processedEventRepository.save(new ProcessedEvent(event.eventId(), KafkaTopics.ORDER_FAILED));
         log.warn("Order FAILED | orderId={} | reason={}", event.orderId(), event.reason());
     }
 
@@ -155,11 +175,19 @@ public class OrderService {
      */
     @Transactional
     public void handlePaymentFailure(OrderEvent event) {
+        // Idempotency check
+        if (processedEventRepository.existsById(event.eventId())) {
+            log.warn("Duplicate event detected, skipping | eventId={} | orderId={} | topic={}",
+                    event.eventId(), event.orderId(), KafkaTopics.PAYMENT_FAILED);
+            return;
+        }
+
         Order order = orderRepository.findById(event.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(event.orderId()));
 
         order.setStatus(OrderStatus.PAYMENT_FAILED);
         order.setFailureReason(event.reason());
+        processedEventRepository.save(new ProcessedEvent(event.eventId(), KafkaTopics.PAYMENT_FAILED));
         log.warn("Order PAYMENT_FAILED | orderId={} | reason={}", event.orderId(), event.reason());
     }
 }

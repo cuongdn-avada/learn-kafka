@@ -1,10 +1,13 @@
 package dnc.cuong.payment.service;
 
+import dnc.cuong.common.event.KafkaTopics;
 import dnc.cuong.common.event.OrderEvent;
 import dnc.cuong.common.event.OrderStatus;
 import dnc.cuong.payment.domain.Payment;
 import dnc.cuong.payment.domain.PaymentRepository;
 import dnc.cuong.payment.domain.PaymentStatus;
+import dnc.cuong.payment.domain.ProcessedEvent;
+import dnc.cuong.payment.domain.ProcessedEventRepository;
 import dnc.cuong.payment.kafka.PaymentKafkaProducer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +36,7 @@ public class PaymentService {
     private static final BigDecimal MAX_AMOUNT = new BigDecimal("10000");
 
     private final PaymentRepository paymentRepository;
+    private final ProcessedEventRepository processedEventRepository;
     private final PaymentKafkaProducer kafkaProducer;
 
     /**
@@ -45,6 +49,13 @@ public class PaymentService {
      */
     @Transactional
     public void processOrderValidated(OrderEvent event) {
+        // Idempotency check: prevent double charge!
+        if (processedEventRepository.existsById(event.eventId())) {
+            log.warn("Duplicate event detected, skipping | eventId={} | orderId={} | topic={}",
+                    event.eventId(), event.orderId(), KafkaTopics.ORDER_VALIDATED);
+            return;
+        }
+
         log.info("Processing payment | orderId={} | amount={}",
                 event.orderId(), event.totalAmount());
 
@@ -68,6 +79,9 @@ public class PaymentService {
                     event.items(), event.totalAmount(),
                     OrderStatus.PAID
             );
+            // Save ProcessedEvent — trong cùng transaction với save Payment
+            processedEventRepository.save(new ProcessedEvent(event.eventId(), KafkaTopics.ORDER_VALIDATED));
+
             kafkaProducer.sendOrderPaid(paidEvent);
 
         } else {
@@ -85,6 +99,9 @@ public class PaymentService {
             paymentRepository.save(payment);
 
             log.warn("Payment FAILED | orderId={} | reason={}", event.orderId(), reason);
+
+            // Save ProcessedEvent even for failure path
+            processedEventRepository.save(new ProcessedEvent(event.eventId(), KafkaTopics.ORDER_VALIDATED));
 
             // Publish payment.failed → trigger compensation
             OrderEvent failedEvent = OrderEvent.withReason(

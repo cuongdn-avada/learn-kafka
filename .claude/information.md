@@ -148,9 +148,9 @@ Order Service ──publish──► [order.placed]
 | 2    | Order Service — Producer fundamentals     | DONE       |
 | 3    | Inventory Service — Consumer fundamentals | DONE       |
 | 4    | Saga Choreography — Full happy path       | DONE       |
-| 5    | Error Handling & Dead Letter Queue        | NEXT       |
-| 6    | Idempotency & Exactly-Once Semantics      | Pending    |
-| 7    | Schema Evolution & Contract Management    | Pending    |
+| 5    | Error Handling & Dead Letter Queue        | DONE       |
+| 6    | Idempotency & Exactly-Once Semantics      | DONE       |
+| 7    | Schema Evolution & Contract Management    | NEXT       |
 | 8    | Testing — Unit + Integration              | Pending    |
 | 9    | Observability — Metrics, Tracing, Logging | Pending    |
 | 10   | Production Hardening & Advanced Topics    | Pending    |

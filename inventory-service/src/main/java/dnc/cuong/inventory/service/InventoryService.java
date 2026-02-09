@@ -1,7 +1,10 @@
 package dnc.cuong.inventory.service;
 
+import dnc.cuong.common.event.KafkaTopics;
 import dnc.cuong.common.event.OrderEvent;
 import dnc.cuong.common.event.OrderStatus;
+import dnc.cuong.inventory.domain.ProcessedEvent;
+import dnc.cuong.inventory.domain.ProcessedEventRepository;
 import dnc.cuong.inventory.domain.Product;
 import dnc.cuong.inventory.domain.ProductRepository;
 import dnc.cuong.inventory.kafka.InventoryKafkaProducer;
@@ -37,6 +40,7 @@ import java.util.stream.Collectors;
 public class InventoryService {
 
     private final ProductRepository productRepository;
+    private final ProcessedEventRepository processedEventRepository;
     private final InventoryKafkaProducer kafkaProducer;
 
     /**
@@ -50,6 +54,13 @@ public class InventoryService {
      */
     @Transactional
     public void processOrderPlaced(OrderEvent event) {
+        // Idempotency check: skip if already processed
+        if (processedEventRepository.existsById(event.eventId())) {
+            log.warn("Duplicate event detected, skipping | eventId={} | orderId={} | topic={}",
+                    event.eventId(), event.orderId(), KafkaTopics.ORDER_PLACED);
+            return;
+        }
+
         log.info("Processing order.placed | orderId={} | itemCount={}",
                 event.orderId(), event.items().size());
 
@@ -85,6 +96,9 @@ public class InventoryService {
             String reason = String.join("; ", failureReasons);
             log.warn("Stock validation FAILED | orderId={} | reason={}", event.orderId(), reason);
 
+            // Save ProcessedEvent even for failure path — prevent duplicate validation
+            processedEventRepository.save(new ProcessedEvent(event.eventId(), KafkaTopics.ORDER_PLACED));
+
             OrderEvent failedEvent = OrderEvent.withReason(
                     event.orderId(), event.customerId(),
                     event.items(), event.totalAmount(),
@@ -107,7 +121,10 @@ public class InventoryService {
         log.info("Stock reserved successfully | orderId={} | itemCount={}",
                 event.orderId(), event.items().size());
 
-        // 5. Publish order.validated
+        // 5. Save ProcessedEvent — trong cùng transaction với reserve stock
+        processedEventRepository.save(new ProcessedEvent(event.eventId(), KafkaTopics.ORDER_PLACED));
+
+        // 6. Publish order.validated
         OrderEvent validatedEvent = OrderEvent.create(
                 event.orderId(), event.customerId(),
                 event.items(), event.totalAmount(),
@@ -126,6 +143,13 @@ public class InventoryService {
      */
     @Transactional
     public void compensateReservation(OrderEvent event) {
+        // Idempotency check: prevent double release (stock cộng thừa)
+        if (processedEventRepository.existsById(event.eventId())) {
+            log.warn("Duplicate compensation event detected, skipping | eventId={} | orderId={}",
+                    event.eventId(), event.orderId());
+            return;
+        }
+
         log.info("Compensating reservation | orderId={} | itemCount={}",
                 event.orderId(), event.items().size());
 
@@ -147,6 +171,9 @@ public class InventoryService {
                 log.warn("Product not found during compensation | productId={}", item.productId());
             }
         }
+
+        // Save ProcessedEvent — trong cùng transaction với release stock
+        processedEventRepository.save(new ProcessedEvent(event.eventId(), KafkaTopics.PAYMENT_FAILED));
 
         log.info("Compensation completed | orderId={}", event.orderId());
     }
