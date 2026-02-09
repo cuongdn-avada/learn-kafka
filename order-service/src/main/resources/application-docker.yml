@@ -1,0 +1,30 @@
+# ============================================================
+# Docker profile — override localhost URLs bằng Docker service names
+#
+# Activated khi: SPRING_PROFILES_ACTIVE=docker (docker-compose.yml)
+# Base config: application.yml (vẫn giữ nguyên cho local dev)
+# ============================================================
+
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/order_db
+
+  kafka:
+    bootstrap-servers: kafka:9092
+    producer:
+      properties:
+        schema.registry.url: http://schema-registry:8081
+    consumer:
+      properties:
+        schema.registry.url: http://schema-registry:8081
+
+management:
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans
+  endpoint:
+    health:
+      show-details: when-authorized
+  tracing:
+    sampling:
+      probability: 0.5   # 50% sampling trong Docker (giảm overhead)

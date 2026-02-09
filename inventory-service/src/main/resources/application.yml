@@ -30,6 +30,10 @@ spring:
       properties:
         enable.idempotence: true
         schema.registry.url: http://localhost:8085
+        compression.type: snappy
+        linger.ms: 20
+        batch.size: 32768
+        delivery.timeout.ms: 120000
     # --- Kafka Observation — propagate traceId/spanId qua Kafka headers ---
     listener:
       observation-enabled: true
@@ -43,9 +47,17 @@ spring:
       properties:
         schema.registry.url: http://localhost:8085
         specific.avro.reader: true
+        max.poll.records: 100
+        max.poll.interval.ms: 300000
+        session.timeout.ms: 45000
+        heartbeat.interval.ms: 15000
 
 server:
   port: 8082
+  shutdown: graceful
+
+spring.lifecycle:
+  timeout-per-shutdown-phase: 30s
 
 management:
   endpoints:

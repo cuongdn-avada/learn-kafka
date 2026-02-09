@@ -129,10 +129,6 @@ services:
         /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server kafka:9092
 
   # --- Prometheus — metrics scraping & querying ---
-  # WHY Prometheus?
-  # → Pull-based model: scrape /actuator/prometheus từ mỗi service.
-  # → Time-series database cho metrics (counters, gauges, histograms).
-  # → PromQL cho querying + alerting.
   prometheus:
     image: prom/prometheus:v2.51.0
     container_name: prometheus
@@ -142,11 +138,14 @@ services:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   # --- Grafana — dashboards & visualization ---
-  # WHY Grafana?
-  # → Rich dashboard UI cho Prometheus metrics.
-  # → Auto-provision datasource + dashboard via config files.
   grafana:
     image: grafana/grafana:10.4.0
     container_name: grafana
@@ -158,18 +157,158 @@ services:
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   # --- Zipkin — distributed tracing UI ---
-  # WHY Zipkin?
-  # → Visualize request traces spanning multiple services.
-  # → Micrometer Tracing (Brave) gửi spans tới Zipkin qua HTTP.
-  # → Lightweight, in-memory storage (đủ cho dev).
   zipkin:
     image: openzipkin/zipkin:3.4
     container_name: zipkin
     ports:
       - "9411:9411"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9411/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # Application Services — profiles: [app]
+  #
+  # WHY profiles?
+  # → `docker compose up -d` khởi chỉ infra (Kafka, DB, monitoring)
+  # → `docker compose --profile app up -d` khởi cả infra + services
+  # → Dev có thể chạy service bằng IDE/mvnw mà infra chạy Docker
+  # ============================================================
+
+  # --- Order Service ---
+  order-service:
+    build:
+      context: .
+      dockerfile: order-service/Dockerfile
+    container_name: order-service
+    profiles: [app]
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # --- Inventory Service ---
+  inventory-service:
+    build:
+      context: .
+      dockerfile: inventory-service/Dockerfile
+    container_name: inventory-service
+    profiles: [app]
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # --- Payment Service ---
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    container_name: payment-service
+    profiles: [app]
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # --- Notification Service ---
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: notification-service
+    profiles: [app]
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 384M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
 volumes:
   postgres-data:

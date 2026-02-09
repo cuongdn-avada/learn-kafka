@@ -32,6 +32,11 @@ spring:
         enable.idempotence: true # WHY? Tránh duplicate khi producer retry
         max.in.flight.requests.per.connection: 5
         schema.registry.url: http://localhost:8085
+        # --- Production tuning ---
+        compression.type: snappy          # ~50% smaller messages, low CPU
+        linger.ms: 20                     # batch 20ms trước khi send
+        batch.size: 32768                 # 32KB batch (default 16KB)
+        delivery.timeout.ms: 120000       # 2 min total delivery timeout
     # --- Kafka Observation — propagate traceId/spanId qua Kafka headers ---
     listener:
       observation-enabled: true
@@ -45,10 +50,19 @@ spring:
       properties:
         schema.registry.url: http://localhost:8085
         specific.avro.reader: true
+        # --- Production tuning ---
+        max.poll.records: 100             # limit records mỗi poll cycle
+        max.poll.interval.ms: 300000      # 5 min max processing time
+        session.timeout.ms: 45000         # 45s heartbeat timeout
+        heartbeat.interval.ms: 15000      # 15s (1/3 session timeout)
 
 # --- Server ---
 server:
   port: 8081
+  shutdown: graceful             # WHY? Cho phép xử lý xong in-flight requests trước khi shutdown
+
+spring.lifecycle:
+  timeout-per-shutdown-phase: 30s  # Max 30s chờ in-flight requests/messages hoàn thành
 
 # --- Actuator + Observability ---
 management:
