@@ -153,6 +153,37 @@ Schema Registry:
 | Kafka UI        | provectuslabs/kafka-ui:latest      | 8088      | Web UI cho Kafka + Schemas     |
 | kafka-init      | apache/kafka:4.0.0 (one-shot)     | -         | Tạo topics khi startup         |
 
+## Testing Architecture (Step 8)
+
+**59 unit tests** — chạy trong ~7 giây, không cần infrastructure (Kafka, DB, Schema Registry).
+
+### Test Strategy
+
+| Layer | Pattern | Mục đích |
+|-------|---------|----------|
+| Domain | Pure JUnit 5 | Test business logic (Product.reserveStock, releaseStock) |
+| Service | @ExtendWith(MockitoExtension) | Mock repo + producer, test business flow + idempotency |
+| Controller | @WebMvcTest + MockMvc | Test REST API endpoint, status codes, response format |
+| Mapper | Pure JUnit 5 | Test Avro ↔ OrderEvent conversion round-trip |
+
+### Test Files
+
+| Module | File | Tests | Focus |
+|--------|------|-------|-------|
+| common | `OrderEventMapperTest` | 6 | toAvro(), fromAvro(), round-trip, all status values |
+| order-service | `OrderServiceTest` | 12 | createOrder, completeOrder, failOrder, handlePaymentFailure, getOrder |
+| order-service | `OrderControllerTest` | 5 | POST 201, GET 200, GET 404 (ProblemDetail), GET list |
+| inventory-service | `ProductTest` | 13 | hasStock, reserveStock, releaseStock, Saga compensation |
+| inventory-service | `InventoryServiceTest` | 8 | processOrderPlaced (happy/fail), compensateReservation, idempotency |
+| payment-service | `PaymentServiceTest` | 7 | Threshold boundary (10000/10000.01), idempotency |
+| notification-service | `NotificationServiceTest` | 8 | In-memory dedup, cross-method shared Set |
+
+### Key Testing Patterns
+- **Idempotency verification**: Mọi service test đều có test case cho duplicate event (processedEventRepository.existsById returns true → skip)
+- **ArgumentCaptor**: Capture event object published lên Kafka để verify nội dung chính xác
+- **Boundary testing**: PaymentServiceTest test chính xác boundary 10000 (success) vs 10000.01 (fail)
+- **No infrastructure needed**: Tất cả test mock DB + Kafka → chạy offline, CI-friendly
+
 ## Design Decisions
 
 | Quyết định                    | Lựa chọn                       | Lý do                                                    |
@@ -181,6 +212,6 @@ Schema Registry:
 | 5    | Error Handling & Dead Letter Queue        | DONE       |
 | 6    | Idempotency & Exactly-Once Semantics      | DONE       |
 | 7    | Schema Evolution & Contract Management    | DONE       |
-| 8    | Testing — Unit + Integration              | NEXT       |
-| 9    | Observability — Metrics, Tracing, Logging | Pending    |
+| 8    | Testing — Unit + Integration              | DONE       |
+| 9    | Observability — Metrics, Tracing, Logging | NEXT       |
 | 10   | Production Hardening & Advanced Topics    | Pending    |

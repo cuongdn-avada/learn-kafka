@@ -241,6 +241,32 @@ curl http://localhost:8085/config
 - Kafka layer: Avro (Schema Registry) — for inter-service events
 - `OrderEventMapper` bridges between `OrderEvent` (Java record) and `OrderEventAvro` (Avro SpecificRecord)
 
+## Testing
+
+Run all tests:
+
+```bash
+./mvnw clean test
+```
+
+**59 unit tests** covering all modules:
+
+| Module | Test Class | Tests | Type |
+|--------|-----------|-------|------|
+| common | `OrderEventMapperTest` | 6 | Avro conversion (round-trip) |
+| order-service | `OrderServiceTest` | 12 | Service logic (Mockito) |
+| order-service | `OrderControllerTest` | 5 | REST API (MockMvc) |
+| inventory-service | `InventoryServiceTest` | 8 | Stock validation (Mockito) |
+| inventory-service | `ProductTest` | 13 | Domain logic (pure unit) |
+| payment-service | `PaymentServiceTest` | 7 | Payment threshold (Mockito) |
+| notification-service | `NotificationServiceTest` | 8 | Dedup logic (pure unit) |
+
+**Test patterns used:**
+- `@ExtendWith(MockitoExtension)` — service layer tests with mocked dependencies
+- `@WebMvcTest` — controller tests with MockMvc (only web layer loaded)
+- Pure JUnit 5 — domain logic and mapper tests (no Spring context)
+- Idempotency verification — every service test includes duplicate event scenarios
+
 ## Useful Commands
 
 ```bash
@@ -274,6 +300,6 @@ docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 | 5    | Error Handling & Dead Letter Queue        | DONE    |
 | 6    | Idempotency & Exactly-Once Semantics      | DONE    |
 | 7    | Schema Evolution & Contract Management    | DONE    |
-| 8    | Testing - Unit + Integration              | Pending |
+| 8    | Testing - Unit + Integration              | DONE    |
 | 9    | Observability - Metrics, Tracing, Logging | Pending |
 | 10   | Production Hardening & Advanced Topics    | Pending |
