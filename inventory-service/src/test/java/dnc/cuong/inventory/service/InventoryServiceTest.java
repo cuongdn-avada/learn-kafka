@@ -7,12 +7,17 @@ import dnc.cuong.inventory.domain.ProcessedEventRepository;
 import dnc.cuong.inventory.domain.Product;
 import dnc.cuong.inventory.domain.ProductRepository;
 import dnc.cuong.inventory.kafka.InventoryKafkaProducer;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import org.junit.jupiter.api.BeforeEach;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -43,8 +48,16 @@ class InventoryServiceTest {
     @Mock
     private InventoryKafkaProducer kafkaProducer;
 
+    @Spy
+    private MeterRegistry meterRegistry = new SimpleMeterRegistry();
+
     @InjectMocks
     private InventoryService inventoryService;
+
+    @BeforeEach
+    void setUp() {
+        inventoryService.initMetrics();
+    }
 
     // --- processOrderPlaced: Happy path ---
 

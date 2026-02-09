@@ -152,6 +152,9 @@ Schema Registry:
 | PostgreSQL      | postgres:16-alpine                 | 5432      | 3 databases                    |
 | Kafka UI        | provectuslabs/kafka-ui:latest      | 8088      | Web UI cho Kafka + Schemas     |
 | kafka-init      | apache/kafka:4.0.0 (one-shot)     | -         | Tạo topics khi startup         |
+| Prometheus      | prom/prometheus:v2.51.0            | 9090      | Metrics scraping + querying    |
+| Grafana         | grafana/grafana:10.4.0             | 3000      | Dashboards (admin/admin)       |
+| Zipkin          | openzipkin/zipkin:3.4              | 9411      | Distributed trace visualization|
 
 ## Testing Architecture (Step 8)
 
@@ -213,5 +216,45 @@ Schema Registry:
 | 6    | Idempotency & Exactly-Once Semantics      | DONE       |
 | 7    | Schema Evolution & Contract Management    | DONE       |
 | 8    | Testing — Unit + Integration              | DONE       |
-| 9    | Observability — Metrics, Tracing, Logging | NEXT       |
-| 10   | Production Hardening & Advanced Topics    | Pending    |
+| 9    | Observability — Metrics, Tracing, Logging | DONE       |
+| 10   | Production Hardening & Advanced Topics    | NEXT       |
+
+## Observability Architecture (Step 9)
+
+```
+Spring Boot Service
+  ├── Micrometer Metrics → /actuator/prometheus → Prometheus (scrape) → Grafana
+  ├── Micrometer Tracing (Brave) → Zipkin (trace UI)
+  └── Logback (traceId/spanId via MDC) → Console (correlated logs)
+```
+
+### 3 Pillars
+
+| Pillar | Stack | Mục đích |
+|--------|-------|----------|
+| Metrics | Micrometer → Prometheus → Grafana | Business metrics (orders, payments, notifications) + JVM metrics |
+| Tracing | Micrometer Tracing (Brave) → Zipkin | Trace request across services qua Kafka headers |
+| Logging | Logback + MDC (traceId/spanId) | Correlate logs từ nhiều service cho cùng 1 request |
+
+### Custom Business Metrics
+
+| Metric | Service | Mô tả |
+|--------|---------|-------|
+| `orders.created.total` | Order Service | Tổng đơn hàng được tạo |
+| `orders.completed.total` | Order Service | Tổng đơn hàng hoàn thành |
+| `orders.failed.total` | Order Service | Tổng đơn hàng thất bại (stock) |
+| `orders.payment_failed.total` | Order Service | Tổng đơn hàng payment fail |
+| `inventory.validated.total` | Inventory Service | Tổng stock validated |
+| `inventory.rejected.total` | Inventory Service | Tổng stock rejected |
+| `inventory.compensated.total` | Inventory Service | Tổng compensation (release stock) |
+| `payments.success.total` | Payment Service | Tổng payment thành công |
+| `payments.failed.total` | Payment Service | Tổng payment thất bại |
+| `notifications.order_completed.total` | Notification Service | Tổng notification order completed |
+| `notifications.order_failed.total` | Notification Service | Tổng notification order failed |
+| `notifications.payment_failed.total` | Notification Service | Tổng notification payment failed |
+
+### Kafka Observation
+
+- `KafkaTemplate.setObservationEnabled(true)` — propagate traceId vào Kafka headers khi produce
+- `ContainerProperties.setObservationEnabled(true)` — extract traceId từ Kafka headers khi consume
+- Config cả trong `application.yml` và Java config class

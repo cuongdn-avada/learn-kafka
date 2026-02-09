@@ -32,6 +32,11 @@ spring:
         enable.idempotence: true # WHY? Tránh duplicate khi producer retry
         max.in.flight.requests.per.connection: 5
         schema.registry.url: http://localhost:8085
+    # --- Kafka Observation — propagate traceId/spanId qua Kafka headers ---
+    listener:
+      observation-enabled: true
+    template:
+      observation-enabled: true
     consumer:
       group-id: order-service-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -45,12 +50,24 @@ spring:
 server:
   port: 8081
 
-# --- Actuator (health check) ---
+# --- Actuator + Observability ---
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: always
+  # --- Distributed Tracing (Zipkin) ---
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans
+  tracing:
+    sampling:
+      probability: 1.0   # 100% sampling for dev — lower in production
+
+# --- Structured Logging — traceId/spanId in log output ---
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"

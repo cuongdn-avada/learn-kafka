@@ -9,6 +9,9 @@ import dnc.cuong.payment.domain.PaymentStatus;
 import dnc.cuong.payment.domain.ProcessedEvent;
 import dnc.cuong.payment.domain.ProcessedEventRepository;
 import dnc.cuong.payment.kafka.PaymentKafkaProducer;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,6 +41,18 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final ProcessedEventRepository processedEventRepository;
     private final PaymentKafkaProducer kafkaProducer;
+    private final MeterRegistry meterRegistry;
+
+    private Counter paymentsSuccessCounter;
+    private Counter paymentsFailedCounter;
+
+    @PostConstruct
+    void initMetrics() {
+        paymentsSuccessCounter = Counter.builder("payments.success.total")
+                .description("Total successful payments").register(meterRegistry);
+        paymentsFailedCounter = Counter.builder("payments.failed.total")
+                .description("Total failed payments").register(meterRegistry);
+    }
 
     /**
      * Xử lý event order.validated: simulate payment.
@@ -83,6 +98,7 @@ public class PaymentService {
             processedEventRepository.save(new ProcessedEvent(event.eventId(), KafkaTopics.ORDER_VALIDATED));
 
             kafkaProducer.sendOrderPaid(paidEvent);
+            paymentsSuccessCounter.increment();
 
         } else {
             String reason = String.format("Payment declined: amount %s exceeds limit %s",
@@ -110,6 +126,7 @@ public class PaymentService {
                     OrderStatus.PAYMENT_FAILED, reason
             );
             kafkaProducer.sendPaymentFailed(failedEvent);
+            paymentsFailedCounter.increment();
         }
     }
 }

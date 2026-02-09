@@ -8,6 +8,9 @@ import dnc.cuong.inventory.domain.ProcessedEventRepository;
 import dnc.cuong.inventory.domain.Product;
 import dnc.cuong.inventory.domain.ProductRepository;
 import dnc.cuong.inventory.kafka.InventoryKafkaProducer;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,6 +45,21 @@ public class InventoryService {
     private final ProductRepository productRepository;
     private final ProcessedEventRepository processedEventRepository;
     private final InventoryKafkaProducer kafkaProducer;
+    private final MeterRegistry meterRegistry;
+
+    private Counter inventoryValidatedCounter;
+    private Counter inventoryRejectedCounter;
+    private Counter inventoryCompensatedCounter;
+
+    @PostConstruct
+    void initMetrics() {
+        inventoryValidatedCounter = Counter.builder("inventory.validated.total")
+                .description("Total orders validated (stock reserved)").register(meterRegistry);
+        inventoryRejectedCounter = Counter.builder("inventory.rejected.total")
+                .description("Total orders rejected (insufficient stock)").register(meterRegistry);
+        inventoryCompensatedCounter = Counter.builder("inventory.compensated.total")
+                .description("Total stock compensations (payment failed)").register(meterRegistry);
+    }
 
     /**
      * Xử lý event order.placed: validate stock → reserve hoặc reject.
@@ -105,6 +123,7 @@ public class InventoryService {
                     OrderStatus.FAILED, reason
             );
             kafkaProducer.sendOrderFailed(failedEvent);
+            inventoryRejectedCounter.increment();
             return;
         }
 
@@ -131,6 +150,7 @@ public class InventoryService {
                 OrderStatus.VALIDATED
         );
         kafkaProducer.sendOrderValidated(validatedEvent);
+        inventoryValidatedCounter.increment();
     }
 
     /**
@@ -176,5 +196,6 @@ public class InventoryService {
         processedEventRepository.save(new ProcessedEvent(event.eventId(), KafkaTopics.PAYMENT_FAILED));
 
         log.info("Compensation completed | orderId={}", event.orderId());
+        inventoryCompensatedCounter.increment();
     }
 }
