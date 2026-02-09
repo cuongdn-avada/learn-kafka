@@ -1,0 +1,95 @@
+{
+  "type": "record",
+  "name": "OrderEventAvro",
+  "namespace": "dnc.cuong.common.avro",
+  "doc": "Order event schema for Kafka messages. Supports schema evolution with backward compatibility.",
+  "fields": [
+    {
+      "name": "eventId",
+      "type": "string",
+      "doc": "Unique event identifier (UUID)"
+    },
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Order identifier (UUID)"
+    },
+    {
+      "name": "customerId",
+      "type": "string",
+      "doc": "Customer identifier (UUID)"
+    },
+    {
+      "name": "items",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "OrderItemAvro",
+          "doc": "Individual line item in an order",
+          "fields": [
+            {
+              "name": "productId",
+              "type": "string",
+              "doc": "Product identifier (UUID)"
+            },
+            {
+              "name": "productName",
+              "type": "string",
+              "doc": "Human-readable product name"
+            },
+            {
+              "name": "quantity",
+              "type": "int",
+              "doc": "Number of units ordered"
+            },
+            {
+              "name": "price",
+              "type": "string",
+              "doc": "Unit price (BigDecimal as string to preserve precision)"
+            }
+          ]
+        }
+      },
+      "doc": "List of items in the order"
+    },
+    {
+      "name": "totalAmount",
+      "type": "string",
+      "doc": "Total order amount (BigDecimal as string to preserve precision)"
+    },
+    {
+      "name": "status",
+      "type": {
+        "type": "enum",
+        "name": "OrderStatusAvro",
+        "doc": "Order lifecycle status",
+        "symbols": ["PLACED", "VALIDATED", "PAID", "COMPLETED", "FAILED", "PAYMENT_FAILED"]
+      },
+      "doc": "Current status of the order"
+    },
+    {
+      "name": "reason",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Failure reason (null if success)"
+    },
+    {
+      "name": "createdAt",
+      "type": "string",
+      "doc": "Event creation timestamp (ISO-8601)"
+    },
+    {
+      "name": "schemaVersion",
+      "type": "int",
+      "default": 1,
+      "doc": "Schema version for tracking evolution"
+    },
+    {
+      "name": "source",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Service that produced this event (added in V2 — demonstrates backward-compatible evolution)"
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 package dnc.cuong.payment.kafka;
 
+import dnc.cuong.common.avro.OrderEventAvro;
+import dnc.cuong.common.avro.OrderEventMapper;
 import dnc.cuong.common.event.KafkaTopics;
 import dnc.cuong.common.event.OrderEvent;
 import dnc.cuong.payment.service.PaymentService;
@@ -9,12 +11,11 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Kafka Consumer — listen topic order.validated.
+ * Kafka Consumer — listen topic order.validated (Avro format).
  *
  * WHY Payment Service consume order.validated (không phải order.placed)?
  * → Choreography Saga: payment chỉ xử lý SAU KHI stock đã validate thành công.
  * → Nếu stock thiếu → không có order.validated → payment không chạy.
- * → Đây là implicit ordering qua event chain.
  */
 @Component
 @RequiredArgsConstructor
@@ -28,7 +29,9 @@ public class PaymentKafkaConsumer {
             groupId = "payment-service-group",
             containerFactory = "kafkaListenerContainerFactory"
     )
-    public void onOrderValidated(OrderEvent event) {
+    public void onOrderValidated(OrderEventAvro avroEvent) {
+        OrderEvent event = OrderEventMapper.fromAvro(avroEvent);
+
         log.info("Received event from [{}] | eventId={} | orderId={} | status={}",
                 KafkaTopics.ORDER_VALIDATED, event.eventId(), event.orderId(), event.status());
 

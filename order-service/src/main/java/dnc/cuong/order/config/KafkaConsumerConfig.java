@@ -1,6 +1,8 @@
 package dnc.cuong.order.config;
 
-import dnc.cuong.common.event.OrderEvent;
+import dnc.cuong.common.avro.OrderEventAvro;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
@@ -12,20 +14,17 @@ import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
-import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.Map;
 
 /**
- * Kafka Consumer configuration cho Order Service.
+ * Kafka Consumer configuration — Avro deserialization với Schema Registry.
  *
- * WHY Order Service cần consumer?
- * → Trong Saga, Order Service là starting point VÀ cũng là ending point.
- * → Cần consume kết quả từ các service khác để cập nhật trạng thái order:
- *   - order.paid → COMPLETED
- *   - order.failed → FAILED (stock insufficient)
- *   - payment.failed → PAYMENT_FAILED
+ * WHY KafkaAvroDeserializer thay vì JsonDeserializer?
+ * → Deserialize Avro binary → SpecificRecord (OrderEventAvro).
+ * → Schema Registry cung cấp writer schema (schema lúc produce) để deserialize chính xác.
+ * → specific.avro.reader=true → trả về SpecificRecord thay vì GenericRecord.
  *
  * WHY DeadLetterPublishingRecoverer thay vì FixedBackOff?
  * → FixedBackOff chỉ retry rồi skip — message bị mất.
@@ -36,36 +35,44 @@ import java.util.Map;
 public class KafkaConsumerConfig {
 
     @Bean
-    public ConsumerFactory<String, OrderEvent> consumerFactory(KafkaProperties kafkaProperties) {
+    public ConsumerFactory<String, OrderEventAvro> consumerFactory(KafkaProperties kafkaProperties) {
         Map<String, Object> props = kafkaProperties.buildConsumerProperties(null);
 
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
-        props.put(JsonDeserializer.TRUSTED_PACKAGES, "dnc.cuong.common.event");
-        props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, OrderEvent.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
+
+        // Schema Registry URL cho deserializer
+        props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+                props.getOrDefault(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+                        "http://localhost:8085"));
+
+        // WHY specific.avro.reader = true?
+        // → false (default): trả về GenericRecord — cần access field by name (string).
+        // → true: trả về SpecificRecord (OrderEventAvro) — type-safe, có getter/setter.
+        // → Cần class OrderEventAvro trên classpath (generated từ avro-maven-plugin).
+        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
 
         return new DefaultKafkaConsumerFactory<>(props);
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, OrderEvent> kafkaListenerContainerFactory(
-            ConsumerFactory<String, OrderEvent> consumerFactory,
-            KafkaTemplate<String, OrderEvent> kafkaTemplate) {
+    public ConcurrentKafkaListenerContainerFactory<String, OrderEventAvro> kafkaListenerContainerFactory(
+            ConsumerFactory<String, OrderEventAvro> consumerFactory,
+            KafkaTemplate<String, OrderEventAvro> kafkaTemplate) {
 
-        ConcurrentKafkaListenerContainerFactory<String, OrderEvent> factory =
+        ConcurrentKafkaListenerContainerFactory<String, OrderEventAvro> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
 
         factory.setConsumerFactory(consumerFactory);
         factory.setConcurrency(3);
 
-        // WHY DeadLetterPublishingRecoverer + ExponentialBackOff?
-        // → Sau khi retry hết → message được publish vào <topic>.DLT thay vì bị drop.
-        // → ExponentialBackOff: 1s → 2s → 4s → 8s → 10s (max), tối đa 3 lần retry.
+        // ExponentialBackOff: 1s → 2s → 4s → 8s → 10s (max), ~3 retries
+        // Sau khi retry hết → message publish vào <topic>.DLT
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
 
         ExponentialBackOff backOff = new ExponentialBackOff(1000L, 2.0);
         backOff.setMaxInterval(10000L);
-        backOff.setMaxElapsedTime(30000L); // ~3 retries with exponential delays
+        backOff.setMaxElapsedTime(30000L);
 
         factory.setCommonErrorHandler(new DefaultErrorHandler(recoverer, backOff));
 

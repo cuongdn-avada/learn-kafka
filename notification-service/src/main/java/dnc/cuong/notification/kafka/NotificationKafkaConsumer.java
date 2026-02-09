@@ -1,5 +1,7 @@
 package dnc.cuong.notification.kafka;
 
+import dnc.cuong.common.avro.OrderEventAvro;
+import dnc.cuong.common.avro.OrderEventMapper;
 import dnc.cuong.common.event.KafkaTopics;
 import dnc.cuong.common.event.OrderEvent;
 import dnc.cuong.notification.service.NotificationService;
@@ -9,19 +11,12 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Kafka Consumer cho Notification Service.
+ * Kafka Consumer cho Notification Service (Avro format).
  *
  * Consume 3 topics — tất cả "terminal state" của Saga:
  * - order.completed → thông báo thành công
  * - order.failed → thông báo stock thiếu
  * - payment.failed → thông báo payment thất bại
- *
- * WHY group-id khác nhau giữa các service?
- * → Mỗi service có group-id riêng → tất cả đều nhận message.
- * → Ví dụ: payment.failed được cả 3 service nhận:
- *   - inventory-service-group → release stock
- *   - order-service-group → update status
- *   - notification-service-group → send notification
  */
 @Component
 @RequiredArgsConstructor
@@ -35,7 +30,9 @@ public class NotificationKafkaConsumer {
             groupId = "notification-service-group",
             containerFactory = "kafkaListenerContainerFactory"
     )
-    public void onOrderCompleted(OrderEvent event) {
+    public void onOrderCompleted(OrderEventAvro avroEvent) {
+        OrderEvent event = OrderEventMapper.fromAvro(avroEvent);
+
         log.info("Received event from [{}] | eventId={} | orderId={}",
                 KafkaTopics.ORDER_COMPLETED, event.eventId(), event.orderId());
 
@@ -47,7 +44,9 @@ public class NotificationKafkaConsumer {
             groupId = "notification-service-group",
             containerFactory = "kafkaListenerContainerFactory"
     )
-    public void onOrderFailed(OrderEvent event) {
+    public void onOrderFailed(OrderEventAvro avroEvent) {
+        OrderEvent event = OrderEventMapper.fromAvro(avroEvent);
+
         log.info("Received event from [{}] | eventId={} | orderId={}",
                 KafkaTopics.ORDER_FAILED, event.eventId(), event.orderId());
 
@@ -59,7 +58,9 @@ public class NotificationKafkaConsumer {
             groupId = "notification-service-group",
             containerFactory = "kafkaListenerContainerFactory"
     )
-    public void onPaymentFailed(OrderEvent event) {
+    public void onPaymentFailed(OrderEventAvro avroEvent) {
+        OrderEvent event = OrderEventMapper.fromAvro(avroEvent);
+
         log.info("Received event from [{}] | eventId={} | orderId={}",
                 KafkaTopics.PAYMENT_FAILED, event.eventId(), event.orderId());
 

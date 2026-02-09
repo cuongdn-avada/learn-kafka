@@ -1,6 +1,8 @@
 package dnc.cuong.order.config;
 
-import dnc.cuong.common.event.OrderEvent;
+import dnc.cuong.common.avro.OrderEventAvro;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
@@ -9,19 +11,17 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
-import org.springframework.kafka.support.serializer.JsonSerializer;
 
 import java.util.Map;
 
 /**
- * Kafka Producer configuration tường minh.
+ * Kafka Producer configuration — Avro serialization với Schema Registry.
  *
- * WHY tạo config class riêng thay vì chỉ dùng application.yml?
- * → application.yml cover được 80% use case, nhưng khi cần:
- *   - Custom serializer settings (type header, etc.)
- *   - Nhiều KafkaTemplate cho các topic khác nhau
- *   - Programmatic config dựa trên environment
- * → Config class cho phép full control, dễ test, dễ debug.
+ * WHY migrate từ JsonSerializer sang KafkaAvroSerializer?
+ * → JSON không enforce schema — producer có thể gửi bất kỳ format nào.
+ * → Avro + Schema Registry validate schema trước khi publish.
+ * → Schema Registry kiểm tra compatibility (BACKWARD default) — ngăn breaking changes.
+ * → Avro binary format nhỏ hơn JSON ~30-50%, parse nhanh hơn.
  *
  * WHY inject KafkaProperties thay vì tự tạo Map?
  * → KafkaProperties đã bind từ application.yml (spring.kafka.*).
@@ -31,24 +31,26 @@ import java.util.Map;
 public class KafkaProducerConfig {
 
     @Bean
-    public ProducerFactory<String, OrderEvent> producerFactory(KafkaProperties kafkaProperties) {
+    public ProducerFactory<String, OrderEventAvro> producerFactory(KafkaProperties kafkaProperties) {
         Map<String, Object> props = kafkaProperties.buildProducerProperties(null);
 
-        // Đảm bảo serializer config đúng type
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
 
-        // WHY ADD_TYPE_INFO_HEADERS = true (default)?
-        // → JsonSerializer tự thêm header "__TypeId__" vào message.
-        // → Consumer dùng header này để biết deserialize thành class nào.
-        // → Quan trọng khi 1 topic có thể chứa nhiều event types.
+        // WHY schema.registry.url ở đây thay vì chỉ application.yml?
+        // → KafkaAvroSerializer cần biết Schema Registry endpoint để register + validate schema.
+        // → Config này cũng có thể đặt trong application.yml via spring.kafka.producer.properties.
+        // → Đặt ở đây cho tường minh, dễ thấy dependency giữa producer và Schema Registry.
+        props.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+                props.getOrDefault(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+                        "http://localhost:8085"));
 
         return new DefaultKafkaProducerFactory<>(props);
     }
 
     @Bean
-    public KafkaTemplate<String, OrderEvent> kafkaTemplate(
-            ProducerFactory<String, OrderEvent> producerFactory) {
+    public KafkaTemplate<String, OrderEventAvro> kafkaTemplate(
+            ProducerFactory<String, OrderEventAvro> producerFactory) {
         return new KafkaTemplate<>(producerFactory);
     }
 }

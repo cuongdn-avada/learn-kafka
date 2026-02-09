@@ -1,7 +1,7 @@
 package dnc.cuong.inventory.kafka;
 
+import dnc.cuong.common.avro.OrderEventAvro;
 import dnc.cuong.common.event.KafkaTopics;
-import dnc.cuong.common.event.OrderEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -20,17 +20,17 @@ public class DltKafkaConsumer {
             topics = KafkaTopics.ORDER_PLACED + KafkaTopics.DLT_SUFFIX,
             groupId = "inventory-service-dlt-group"
     )
-    public void onOrderPlacedDlt(OrderEvent event) {
+    public void onOrderPlacedDlt(OrderEventAvro event) {
         log.error("[DLT] Failed to process order.placed | orderId={} | eventId={} | status={}",
-                event.orderId(), event.eventId(), event.status());
+                event.getOrderId(), event.getEventId(), event.getStatus());
     }
 
     @KafkaListener(
             topics = KafkaTopics.PAYMENT_FAILED + KafkaTopics.DLT_SUFFIX,
             groupId = "inventory-service-dlt-group"
     )
-    public void onPaymentFailedDlt(OrderEvent event) {
+    public void onPaymentFailedDlt(OrderEventAvro event) {
         log.error("[DLT] Failed to process payment.failed | orderId={} | eventId={} | status={}",
-                event.orderId(), event.eventId(), event.status());
+                event.getOrderId(), event.getEventId(), event.getStatus());
     }
 }

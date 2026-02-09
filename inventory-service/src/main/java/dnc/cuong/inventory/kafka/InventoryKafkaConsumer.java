@@ -1,5 +1,7 @@
 package dnc.cuong.inventory.kafka;
 
+import dnc.cuong.common.avro.OrderEventAvro;
+import dnc.cuong.common.avro.OrderEventMapper;
 import dnc.cuong.common.event.KafkaTopics;
 import dnc.cuong.common.event.OrderEvent;
 import dnc.cuong.inventory.service.InventoryService;
@@ -9,23 +11,10 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Kafka Consumer — listen topic order.placed.
+ * Kafka Consumer — listen topics order.placed và payment.failed (Avro format).
  *
- * WHY @KafkaListener thay vì manual poll loop?
- * → Spring Kafka abstract hóa consumer poll loop phức tạp.
- * → @KafkaListener tự quản lý: poll, deserialize, commit offset, error handling.
- * → Developer chỉ cần focus business logic trong method body.
- *
- * WHY groupId = "inventory-service-group"?
- * → Consumer Group đảm bảo: mỗi partition chỉ được 1 consumer trong group xử lý.
- * → Nếu chạy 3 instance inventory-service → mỗi instance xử lý 1 partition.
- * → Nếu 1 instance die → Kafka rebalance partition cho instance còn lại.
- * → Group ID khác nhau giữa services → mỗi service nhận TẤT CẢ messages.
- *
- * WHY containerFactory = "kafkaListenerContainerFactory"?
- * → Link tới bean trong KafkaConsumerConfig.
- * → Factory quyết định: concurrency, error handler, deserializer.
- * → Nếu không chỉ định → Spring dùng default factory (ít control hơn).
+ * Consumer nhận OrderEventAvro (Avro SpecificRecord) → convert sang OrderEvent (Java record)
+ * → delegate cho InventoryService (service layer không biết về Avro).
  */
 @Component
 @RequiredArgsConstructor
@@ -39,7 +28,9 @@ public class InventoryKafkaConsumer {
             groupId = "inventory-service-group",
             containerFactory = "kafkaListenerContainerFactory"
     )
-    public void onOrderPlaced(OrderEvent event) {
+    public void onOrderPlaced(OrderEventAvro avroEvent) {
+        OrderEvent event = OrderEventMapper.fromAvro(avroEvent);
+
         log.info("Received event from [{}] | eventId={} | orderId={} | status={}",
                 KafkaTopics.ORDER_PLACED, event.eventId(), event.orderId(), event.status());
 
@@ -48,20 +39,14 @@ public class InventoryKafkaConsumer {
         log.info("Finished processing [{}] | orderId={}", KafkaTopics.ORDER_PLACED, event.orderId());
     }
 
-    /**
-     * Compensation listener: khi payment thất bại → release reserved stock.
-     *
-     * WHY Inventory Service consume payment.failed?
-     * → Saga compensation: stock đã reserve ở bước validate.
-     * → Payment thất bại → phải hoàn trả stock để customer khác đặt được.
-     * → Nếu không release → stock bị "leak" (reserved mãi mãi).
-     */
     @KafkaListener(
             topics = KafkaTopics.PAYMENT_FAILED,
             groupId = "inventory-service-group",
             containerFactory = "kafkaListenerContainerFactory"
     )
-    public void onPaymentFailed(OrderEvent event) {
+    public void onPaymentFailed(OrderEventAvro avroEvent) {
+        OrderEvent event = OrderEventMapper.fromAvro(avroEvent);
+
         log.info("Received event from [{}] | eventId={} | orderId={} | status={}",
                 KafkaTopics.PAYMENT_FAILED, event.eventId(), event.orderId(), event.status());
 

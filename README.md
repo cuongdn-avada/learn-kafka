@@ -18,11 +18,12 @@ docker compose up -d
 ```
 
 This starts:
-| Service    | Port | Purpose                        |
-|------------|------|--------------------------------|
-| Kafka      | 9094 | Event broker (KRaft mode)      |
-| PostgreSQL | 5432 | Databases (order, inventory, payment) |
-| Kafka UI   | 8088 | Web UI for Kafka               |
+| Service         | Port | Purpose                        |
+|-----------------|------|--------------------------------|
+| Kafka           | 9094 | Event broker (KRaft mode)      |
+| Schema Registry | 8085 | Schema management (Avro)       |
+| PostgreSQL      | 5432 | Databases (order, inventory, payment) |
+| Kafka UI        | 8088 | Web UI for Kafka + Schemas     |
 
 Wait for Kafka to be healthy (topics are auto-created by `kafka-init` container):
 
@@ -163,13 +164,14 @@ Open Kafka UI at [http://localhost:8088](http://localhost:8088) and check:
 
 ```
 learn-kafka/
-├── common/                 # Shared events, DTOs, constants
+├── common/                 # Shared events, DTOs, Avro schemas, constants
+│   └── src/main/avro/      # Avro schema files (.avsc)
 ├── order-service/          # REST API + Kafka Producer (port 8081)
 ├── inventory-service/      # Stock management (port 8082)
 ├── payment-service/        # Payment processing (port 8083)
 ├── notification-service/   # Notification consumer (port 8084)
 ├── infra/                  # Infrastructure scripts
-├── docker-compose.yml      # Kafka + PostgreSQL + Kafka UI
+├── docker-compose.yml      # Kafka + Schema Registry + PostgreSQL + Kafka UI
 └── docs/                   # Diagrams and documentation
 ```
 
@@ -214,6 +216,31 @@ DLT consumers log at ERROR level with `[DLT]` prefix. Look for messages like:
 [DLT] Failed to process order.placed | orderId=... | eventId=... | status=...
 ```
 
+## Schema Registry
+
+Kafka messages are serialized using **Apache Avro** with **Confluent Schema Registry**.
+
+- Schema Registry UI: integrated in Kafka UI at [http://localhost:8088](http://localhost:8088)
+- Schema Registry API: [http://localhost:8085](http://localhost:8085)
+
+**Useful Schema Registry commands:**
+
+```bash
+# List all registered schema subjects
+curl http://localhost:8085/subjects
+
+# Get latest schema for a topic
+curl http://localhost:8085/subjects/order.placed-value/versions/latest
+
+# Check global compatibility level
+curl http://localhost:8085/config
+```
+
+**Serialization architecture:**
+- REST API layer: JSON (Jackson) — for client communication
+- Kafka layer: Avro (Schema Registry) — for inter-service events
+- `OrderEventMapper` bridges between `OrderEvent` (Java record) and `OrderEventAvro` (Avro SpecificRecord)
+
 ## Useful Commands
 
 ```bash
@@ -229,7 +256,7 @@ docker compose down -v
 # List Kafka topics
 docker exec kafka /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092
 
-# Read messages from a topic
+# Read messages from a topic (note: Avro binary, use Kafka UI for readable view)
 docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
   --topic order.placed \
@@ -245,8 +272,8 @@ docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 | 3    | Inventory Service - Consumer fundamentals | DONE    |
 | 4    | Saga Choreography - Full happy path       | DONE    |
 | 5    | Error Handling & Dead Letter Queue        | DONE    |
-| 6    | Idempotency & Exactly-Once Semantics      | Pending |
-| 7    | Schema Evolution & Contract Management    | Pending |
+| 6    | Idempotency & Exactly-Once Semantics      | DONE    |
+| 7    | Schema Evolution & Contract Management    | DONE    |
 | 8    | Testing - Unit + Integration              | Pending |
 | 9    | Observability - Metrics, Tracing, Logging | Pending |
 | 10   | Production Hardening & Advanced Topics    | Pending |
