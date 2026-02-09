@@ -1,0 +1,233 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Orders Created (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "rate(orders_created_total[1m]) * 60",
+          "legendFormat": "orders/min",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 10 }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Orders Completed vs Failed",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "targets": [
+        {
+          "expr": "rate(orders_completed_total[1m]) * 60",
+          "legendFormat": "completed/min",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(orders_failed_total[1m]) * 60",
+          "legendFormat": "failed/min",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(orders_payment_failed_total[1m]) * 60",
+          "legendFormat": "payment_failed/min",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 10 }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Payment Success Rate",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "targets": [
+        {
+          "expr": "payments_success_total / (payments_success_total + payments_failed_total) * 100",
+          "legendFormat": "success %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "green", "value": 90 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Inventory Validated vs Rejected",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "rate(inventory_validated_total[1m]) * 60",
+          "legendFormat": "validated/min",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(inventory_rejected_total[1m]) * 60",
+          "legendFormat": "rejected/min",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(inventory_compensated_total[1m]) * 60",
+          "legendFormat": "compensated/min",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 10 }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Payments (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "targets": [
+        {
+          "expr": "rate(payments_success_total[1m]) * 60",
+          "legendFormat": "success/min",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(payments_failed_total[1m]) * 60",
+          "legendFormat": "failed/min",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 10 }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Notifications Sent (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "targets": [
+        {
+          "expr": "rate(notifications_order_completed_total[1m]) * 60",
+          "legendFormat": "order_completed/min",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(notifications_order_failed_total[1m]) * 60",
+          "legendFormat": "order_failed/min",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(notifications_payment_failed_total[1m]) * 60",
+          "legendFormat": "payment_failed/min",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 10 }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "JVM Memory Used",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "jvm_memory_used_bytes{area=\"heap\", job=\"order-service\"} / 1024 / 1024",
+          "legendFormat": "order-service heap (MB)",
+          "refId": "A"
+        },
+        {
+          "expr": "jvm_memory_used_bytes{area=\"heap\", job=\"inventory-service\"} / 1024 / 1024",
+          "legendFormat": "inventory-service heap (MB)",
+          "refId": "B"
+        },
+        {
+          "expr": "jvm_memory_used_bytes{area=\"heap\", job=\"payment-service\"} / 1024 / 1024",
+          "legendFormat": "payment-service heap (MB)",
+          "refId": "C"
+        },
+        {
+          "expr": "jvm_memory_used_bytes{area=\"heap\", job=\"notification-service\"} / 1024 / 1024",
+          "legendFormat": "notification-service heap (MB)",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 10 },
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "HTTP Server Request Duration (p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{job=\"order-service\"}[1m]))",
+          "legendFormat": "order-service p99",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 10 },
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["spring-boot", "kafka", "observability"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Spring Boot Kafka Pipeline",
+  "uid": "spring-boot-kafka",
+  "version": 1
+}

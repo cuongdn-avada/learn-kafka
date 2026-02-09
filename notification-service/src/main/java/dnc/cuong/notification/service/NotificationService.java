@@ -1,6 +1,10 @@
 package dnc.cuong.notification.service;
 
 import dnc.cuong.common.event.OrderEvent;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -23,10 +27,26 @@ import java.util.concurrent.ConcurrentHashMap;
  *   - Production: dùng Redis SET hoặc thêm lightweight DB.
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class NotificationService {
 
+    private final MeterRegistry meterRegistry;
     private final Set<UUID> processedEventIds = ConcurrentHashMap.newKeySet();
+
+    private Counter notifyOrderCompletedCounter;
+    private Counter notifyOrderFailedCounter;
+    private Counter notifyPaymentFailedCounter;
+
+    @PostConstruct
+    void initMetrics() {
+        notifyOrderCompletedCounter = Counter.builder("notifications.order_completed.total")
+                .description("Total order-completed notifications sent").register(meterRegistry);
+        notifyOrderFailedCounter = Counter.builder("notifications.order_failed.total")
+                .description("Total order-failed notifications sent").register(meterRegistry);
+        notifyPaymentFailedCounter = Counter.builder("notifications.payment_failed.total")
+                .description("Total payment-failed notifications sent").register(meterRegistry);
+    }
 
     public void notifyOrderCompleted(OrderEvent event) {
         if (!processedEventIds.add(event.eventId())) {
@@ -42,6 +62,7 @@ public class NotificationService {
         log.info("  Items: {}", event.items().size());
         log.info("  → Email sent: Your order has been completed successfully!");
         log.info("=====================================");
+        notifyOrderCompletedCounter.increment();
     }
 
     public void notifyOrderFailed(OrderEvent event) {
@@ -57,6 +78,7 @@ public class NotificationService {
         log.info("  Reason: {}", event.reason());
         log.info("  → Email sent: Sorry, your order could not be processed.");
         log.info("==================================");
+        notifyOrderFailedCounter.increment();
     }
 
     public void notifyPaymentFailed(OrderEvent event) {
@@ -73,5 +95,6 @@ public class NotificationService {
         log.info("  Reason: {}", event.reason());
         log.info("  → Email sent: Payment for your order has failed. Please try again.");
         log.info("====================================");
+        notifyPaymentFailedCounter.increment();
     }
 }

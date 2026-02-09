@@ -10,6 +10,9 @@ import dnc.cuong.order.domain.OrderRepository;
 import dnc.cuong.order.domain.ProcessedEvent;
 import dnc.cuong.order.domain.ProcessedEventRepository;
 import dnc.cuong.order.kafka.OrderKafkaProducer;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,6 +41,24 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final ProcessedEventRepository processedEventRepository;
     private final OrderKafkaProducer kafkaProducer;
+    private final MeterRegistry meterRegistry;
+
+    private Counter ordersCreatedCounter;
+    private Counter ordersCompletedCounter;
+    private Counter ordersFailedCounter;
+    private Counter ordersPaymentFailedCounter;
+
+    @PostConstruct
+    void initMetrics() {
+        ordersCreatedCounter = Counter.builder("orders.created.total")
+                .description("Total orders created").register(meterRegistry);
+        ordersCompletedCounter = Counter.builder("orders.completed.total")
+                .description("Total orders completed").register(meterRegistry);
+        ordersFailedCounter = Counter.builder("orders.failed.total")
+                .description("Total orders failed (stock validation)").register(meterRegistry);
+        ordersPaymentFailedCounter = Counter.builder("orders.payment_failed.total")
+                .description("Total orders with payment failure").register(meterRegistry);
+    }
 
     /**
      * Tạo đơn hàng mới và publish event order.placed.
@@ -101,6 +122,7 @@ public class OrderService {
 
         // 5. Publish — async, không block response
         kafkaProducer.sendOrderPlaced(event);
+        ordersCreatedCounter.increment();
 
         return savedOrder;
     }
@@ -146,6 +168,7 @@ public class OrderService {
                 OrderStatus.COMPLETED
         );
         kafkaProducer.sendOrderCompleted(completedEvent);
+        ordersCompletedCounter.increment();
     }
 
     /**
@@ -167,6 +190,7 @@ public class OrderService {
         order.setFailureReason(event.reason());
         processedEventRepository.save(new ProcessedEvent(event.eventId(), KafkaTopics.ORDER_FAILED));
         log.warn("Order FAILED | orderId={} | reason={}", event.orderId(), event.reason());
+        ordersFailedCounter.increment();
     }
 
     /**
@@ -189,5 +213,6 @@ public class OrderService {
         order.setFailureReason(event.reason());
         processedEventRepository.save(new ProcessedEvent(event.eventId(), KafkaTopics.PAYMENT_FAILED));
         log.warn("Order PAYMENT_FAILED | orderId={} | reason={}", event.orderId(), event.reason());
+        ordersPaymentFailedCounter.increment();
     }
 }

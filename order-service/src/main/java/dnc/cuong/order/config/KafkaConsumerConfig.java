@@ -65,6 +65,7 @@ public class KafkaConsumerConfig {
 
         factory.setConsumerFactory(consumerFactory);
         factory.setConcurrency(3);
+        factory.getContainerProperties().setObservationEnabled(true);
 
         // ExponentialBackOff: 1s → 2s → 4s → 8s → 10s (max), ~3 retries
         // Sau khi retry hết → message publish vào <topic>.DLT

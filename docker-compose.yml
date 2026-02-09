@@ -128,5 +128,48 @@ services:
         echo 'Topics da tao xong:'
         /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server kafka:9092
 
+  # --- Prometheus — metrics scraping & querying ---
+  # WHY Prometheus?
+  # → Pull-based model: scrape /actuator/prometheus từ mỗi service.
+  # → Time-series database cho metrics (counters, gauges, histograms).
+  # → PromQL cho querying + alerting.
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # --- Grafana — dashboards & visualization ---
+  # WHY Grafana?
+  # → Rich dashboard UI cho Prometheus metrics.
+  # → Auto-provision datasource + dashboard via config files.
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+
+  # --- Zipkin — distributed tracing UI ---
+  # WHY Zipkin?
+  # → Visualize request traces spanning multiple services.
+  # → Micrometer Tracing (Brave) gửi spans tới Zipkin qua HTTP.
+  # → Lightweight, in-memory storage (đủ cho dev).
+  zipkin:
+    image: openzipkin/zipkin:3.4
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+
 volumes:
   postgres-data:

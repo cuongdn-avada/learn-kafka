@@ -32,6 +32,7 @@
         <lombok.version>1.18.34</lombok.version>
         <avro.version>1.11.4</avro.version>
         <confluent.version>7.7.1</confluent.version>
+        <zipkin-reporter.version>2.17.2</zipkin-reporter.version>
     </properties>
 
     <!-- Confluent Maven Repository — cho kafka-avro-serializer -->
@@ -62,6 +63,12 @@
                 <groupId>io.confluent</groupId>
                 <artifactId>kafka-avro-serializer</artifactId>
                 <version>${confluent.version}</version>
+            </dependency>
+            <!-- Zipkin reporter — send spans to Zipkin server -->
+            <dependency>
+                <groupId>io.zipkin.reporter2</groupId>
+                <artifactId>zipkin-reporter-brave</artifactId>
+                <version>${zipkin-reporter.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -24,6 +24,9 @@ This starts:
 | Schema Registry | 8085 | Schema management (Avro)       |
 | PostgreSQL      | 5432 | Databases (order, inventory, payment) |
 | Kafka UI        | 8088 | Web UI for Kafka + Schemas     |
+| Prometheus      | 9090 | Metrics scraping + querying    |
+| Grafana         | 3000 | Dashboards (admin/admin)       |
+| Zipkin          | 9411 | Distributed trace visualization|
 
 Wait for Kafka to be healthy (topics are auto-created by `kafka-init` container):
 
@@ -267,6 +270,56 @@ Run all tests:
 - Pure JUnit 5 — domain logic and mapper tests (no Spring context)
 - Idempotency verification — every service test includes duplicate event scenarios
 
+## Observability (Step 9)
+
+### 3 Pillars
+
+| Pillar | Tool | Endpoint |
+|--------|------|----------|
+| Metrics | Prometheus + Grafana | [http://localhost:9090](http://localhost:9090) / [http://localhost:3000](http://localhost:3000) |
+| Tracing | Micrometer Tracing (Brave) + Zipkin | [http://localhost:9411](http://localhost:9411) |
+| Logging | Logback with traceId/spanId via MDC | Console output |
+
+### Custom Business Metrics
+
+| Metric | Service |
+|--------|---------|
+| `orders.created.total` | Order Service |
+| `orders.completed.total` | Order Service |
+| `orders.failed.total` | Order Service |
+| `orders.payment_failed.total` | Order Service |
+| `inventory.validated.total` | Inventory Service |
+| `inventory.rejected.total` | Inventory Service |
+| `inventory.compensated.total` | Inventory Service |
+| `payments.success.total` | Payment Service |
+| `payments.failed.total` | Payment Service |
+| `notifications.order_completed.total` | Notification Service |
+| `notifications.order_failed.total` | Notification Service |
+| `notifications.payment_failed.total` | Notification Service |
+
+### Verify Observability
+
+```bash
+# Check Prometheus metrics endpoint
+curl http://localhost:8081/actuator/prometheus | grep orders_created
+
+# Check Prometheus targets (all 4 services should be UP)
+open http://localhost:9090/targets
+
+# Check Grafana dashboard
+open http://localhost:3000  # admin/admin
+
+# Check distributed traces in Zipkin
+open http://localhost:9411
+```
+
+### Structured Log Format
+
+Logs include traceId and spanId for cross-service correlation:
+```
+INFO [order-service,6a3d8f2b1c4e5a7b,9f8e7d6c5b4a3210] Order created | orderId=...
+```
+
 ## Useful Commands
 
 ```bash
@@ -301,5 +354,5 @@ docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 | 6    | Idempotency & Exactly-Once Semantics      | DONE    |
 | 7    | Schema Evolution & Contract Management    | DONE    |
 | 8    | Testing - Unit + Integration              | DONE    |
-| 9    | Observability - Metrics, Tracing, Logging | Pending |
+| 9    | Observability - Metrics, Tracing, Logging | DONE    |
 | 10   | Production Hardening & Advanced Topics    | Pending |

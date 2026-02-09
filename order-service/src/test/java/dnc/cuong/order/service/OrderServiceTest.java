@@ -8,12 +8,17 @@ import dnc.cuong.order.domain.OrderRepository;
 import dnc.cuong.order.domain.ProcessedEvent;
 import dnc.cuong.order.domain.ProcessedEventRepository;
 import dnc.cuong.order.kafka.OrderKafkaProducer;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import org.junit.jupiter.api.BeforeEach;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -44,8 +49,16 @@ class OrderServiceTest {
     @Mock
     private OrderKafkaProducer kafkaProducer;
 
+    @Spy
+    private MeterRegistry meterRegistry = new SimpleMeterRegistry();
+
     @InjectMocks
     private OrderService orderService;
+
+    @BeforeEach
+    void setUp() {
+        orderService.initMetrics();
+    }
 
     // --- createOrder ---
 

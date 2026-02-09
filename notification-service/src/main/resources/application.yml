@@ -18,6 +18,11 @@ spring:
       value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
       properties:
         schema.registry.url: http://localhost:8085
+    # --- Kafka Observation — propagate traceId/spanId qua Kafka headers ---
+    listener:
+      observation-enabled: true
+    template:
+      observation-enabled: true
 
 # Notification service không cần database — chỉ consume event và gửi notification
 # Producer config cần cho DeadLetterPublishingRecoverer — publish failed messages vào .DLT topic
@@ -29,7 +34,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: always
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans
+  tracing:
+    sampling:
+      probability: 1.0
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"

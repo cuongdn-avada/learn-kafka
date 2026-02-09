@@ -2,6 +2,7 @@ package dnc.cuong.notification.service;
 
 import dnc.cuong.common.event.OrderEvent;
 import dnc.cuong.common.event.OrderStatus;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +27,8 @@ class NotificationServiceTest {
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationService();
+        notificationService = new NotificationService(new SimpleMeterRegistry());
+        notificationService.initMetrics();
     }
 
     // --- notifyOrderCompleted ---
